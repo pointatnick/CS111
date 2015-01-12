@@ -1,46 +1,88 @@
-// UCLA CS 111 Lab 1 command reading
-
-// Copyright 2012-2014 Paul Eggert.
-
-// This program is free software: you can redistribute it and/or modify
-// it under the terms of the GNU General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or
-// (at your option) any later version.
-
-// This program is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-// GNU General Public License for more details.
-
-// You should have received a copy of the GNU General Public License
-// along with this program.  If not, see <http://www.gnu.org/licenses/>.
-
 #include "command.h"
 #include "command-internals.h"
 
 #include <error.h>
 
-/* FIXME: You may need to add #include directives, macro definitions,
-   static function definitions, etc.  */
+bool end = false;
 
-/* FIXME: Define the type 'struct command_stream' here.  This should
-   complete the incomplete type declaration in command.h.  */
+typedef struct node node_t;
+
+struct node {
+  command_t m_command;
+  node_t* m_next;
+};
+
+struct command_stream {
+  node_t* m_head;
+  node_t* m_curr;
+  int stream_size;
+};
+
+/* Read a command, add it to the command_stream. Check that it is a valid
+   command first before adding the command in. */
+
+// Initialization
+command_stream_t
+init_command_stream()
+{
+  command_stream_t cmd_stream = (command_stream_t) checked_malloc(sizeof (struct command_stream));
+  m_head = NULL;
+  return cmd_stream;
+}
+
+// Syntax checks
+bool is_word(char c)
+{
+  return isalpha(c) || isdigit(c) || (c == '!') || (c == '%')
+                    || (c == '+') || (c == ',') || (c == '-')
+                    || (c == '.') || (c == '/') || (c == ':')
+                    || (c == '@') || (c == '^') || (c == '_');
+}
+
+bool is_token(char c)
+{
+  return (c == ';') || (c == '|') || (c == '(')
+      || (c == ')') || (c == '<') || (c == '>');
+}
 
 command_stream_t
 make_command_stream (int (*get_next_byte) (void *),
 		     void *get_next_byte_argument)
 {
-  /* FIXME: Replace this with your implementation.  You may need to
-     add auxiliary functions and otherwise modify the source code.
-     You can also use external functions defined in the GNU C Library.  */
-  error (1, 0, "command reading not yet implemented");
-  return 0;
+  int c = 0;
+  int line = 1;
+  int cmd_chars = 0;
+  // initialize command stream
+  command_stream_t cmd_stream = init_command_stream();
+  // read in commmand
+  while ((c = get_next_byte(get_next_byte_argument)) != EOF)
+  {
+    // check if special character (not part of the command)
+    // tokens: ; | ( ) < >
+    // comments: # not preceded by token, followed by chars up to (not including) the newline
+    // whitespace: space, tab, newline
+      // newline is special, able to substitute for semicolon
+      // newline precedes ( ) if then else fi while do done until and first word of simple command
+      // newline can follow any special token other than < >
+    // check if valid character
+      // add to current command node
+      // if token or compound word, create new node
+  }
+  // verify that it's a valid command
+  // add command to command stream
+  return cmd_stream;
 }
 
 command_t
 read_command_stream (command_stream_t s)
 {
-  /* FIXME: Replace this with your implementation too.  */
-  error (1, 0, "command reading not yet implemented");
-  return 0;
+  if (s->m_curr)
+  {
+    node_t cmd_node = s->m_curr;
+    command_t cmd = s->m_curr->m_command;
+    s->m_curr = s->m_curr->m_next;
+    free(cmd_node);
+    return cmd;
+  }
+  return NULL;
 }
