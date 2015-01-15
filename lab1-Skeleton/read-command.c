@@ -31,21 +31,12 @@ struct command_stream {
   int stream_size;
 };
 
-enum token_type
-{
-  IF_TOKEN,
-  PIPE_TOKEN,
-  SEQUENCE_TOKEN,
-  SUBSHELL_TOKEN,
-  UNTIL_TOKEN,
-  WHILE_TOKEN,
-};
-
 // May need to be updated later
-void insert_cmd(command_t cmd, command_stream_t cmd_stream)
+void insert_cmd(char *word, command_type cmd_type, command_stream_t cmd_stream)
 {
   node_t new_node = (node_t) checked_malloc(sizeof(struct node));
-  // make command
+  command_t new_cmd = make_cmd(word, cmd_type);
+  new_node->m_command = new_cmd; 
   if (cmd_stream->m_head == NULL)
   {
     cmd_stream->m_head = new_node;
@@ -59,9 +50,22 @@ void insert_cmd(command_t cmd, command_stream_t cmd_stream)
   cmd_total++;
 }
 
-command_t make_cmd(char *word, token_type cmd_type)
+command_t make_cmd(char *word, command_type cmd_type)
 {
-
+  command_t new_cmd = (command_t) checked_malloc(sizeof(struct command));
+  new_cmd->type = cmd_type;
+  switch(cmd_type)
+  {
+    case IF_COMMAND:
+    case PIPE_COMMAND:
+    case SEQUENCE_COMMAND:
+    case SUBSHELL_COMMAND:
+    case UNTIL_COMMAND:
+    case WHILE_COMMAND:
+    default:
+      new_cmd = make_simple_cmd(word)
+  }
+  return new_cmd;
 }
 
 command_t make_simple_cmd(char *word)
