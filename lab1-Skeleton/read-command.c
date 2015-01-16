@@ -57,11 +57,14 @@ command_t make_cmd(char *word, command_type cmd_type)
   switch(cmd_type)
   {
     case IF_COMMAND:
-    case PIPE_COMMAND:
-    case SEQUENCE_COMMAND:
-    case SUBSHELL_COMMAND:
     case UNTIL_COMMAND:
     case WHILE_COMMAND:
+    case PIPE_COMMAND:
+      // Inside a pipe command can be subshell, pipe, sequence, simple
+    case SEQUENCE_COMMAND:
+      // Inside a sequence command can be subshell, pipe, seqeuence, simple 
+    case SUBSHELL_COMMAND:
+      // Inside a subshell command can be subshell, pipe, sequence, simple
     default:
       new_cmd = make_simple_cmd(word)
   }
@@ -182,6 +185,7 @@ make_command_stream (int (*get_next_byte) (void *),
   int it = 0;
   int counter = 0;
   int check;
+  int sc_marker = 0;
   int paren_count = 1;
   bool found_right_paren = false;
   bool newline_enc = false;
@@ -206,16 +210,6 @@ make_command_stream (int (*get_next_byte) (void *),
     // Iterate over stream and process each line as an expression
     // Check the whole command stream if each expression taken in is valid
 
-    // tokens: ; | ( ) < >
-    // comments: # not preceded by token, followed by chars up to (not including) the newline
-    // whitespace: space, tab, newline
-      // newline is special, able to substitute for semicolon
-      // newline can only precede ( ) if then else fi while do done until and first word of simple command
-      // newline can follow any special token other than < >
-    // take a command
-    // check if command has proper beginning & end
-      // if it doesn't, report error and quit
-    // add command to stream
     // check all commands for syntax
       // if invalid syntax, report error and exit
     // do a second pass and handle redirects
@@ -230,9 +224,9 @@ make_command_stream (int (*get_next_byte) (void *),
        fi or done. Then, insert char_stream into a command node
        and reset. */
     // character check
-    if (!is_word(char_stream[it] || !is_token(char_stream[it]) ||
-        char_stream[it] != ' ' || char_stream[it] != '\n' ||
-        char_stream[it] != '\t' || char_stream[it] != '\0')
+    if (!is_word(char_stream[it] && !is_token(char_stream[it]) &&
+        char_stream[it] != ' ' && char_stream[it] != '\n' &&
+        char_stream[it] != '\t' && char_stream[it] != '\0')
     {
       print_err(line);
       // exit
@@ -384,6 +378,13 @@ make_command_stream (int (*get_next_byte) (void *),
       newline_enc = false;
     }
     // comment behavior
+    if (char_stream[it] == '#')
+      if (it == 0 || !is_word(char_stream[it - 1]))
+        for(; char_stream[it] != '\n'; it++)
+        {
+          char_stream[it] == buffer[i];
+          i++;
+        }
     // newline behavior
     if (char_stream[it] == '\n')
     {
@@ -399,19 +400,29 @@ make_command_stream (int (*get_next_byte) (void *),
         print_err(line);
         // exit
       }
-      <;
       for(; char_stream[it] != '\n' && char_stream[it] != ' ' && char_stream[it] != '\0'; it++)
       {
         if (char_stream[it - 1] == ';' || char_stream[it - 1] == '\n' ||
             char_stream[it - 1] == '|' || char_stream[it - 1] == '<' ||
-            char_stream[it - 1] == '>' || char_stream[it - 1] == '(')
+            char_stream[it - 1] == '>' || char_stream[it - 1] == '(' ||
+            char_stream[it - 1] == ' ' || char_stream[it - 1] == '\t')
         {
           print_err(line);
           // exit
         }
         char_stream[it] = buffer[i];
         i++;
+        sc_marker++;
       }
+      if (sc_marker > 1)
+      {
+        cmd_type = SEQUENCE_COMMAND;
+        insert_cmd(char_stream, cmd_type, cmd_stream);
+        memset(char_stream, '\0', strlen(char_stream));
+        break;
+      }
+      else
+        make_simple_cmd(char_stream);
     }
     // pipe behavior
     if (char_stream[it] == '|')
@@ -446,7 +457,7 @@ make_command_stream (int (*get_next_byte) (void *),
           paren_count--;
         if(paren_count == 0)
           found_right_paren = true;
-        if(char_stream[it] == '\n' && char_stream[it] == ';' && char_stream[it] == '\0')
+        if(char_stream[it] == '\n' || char_stream[it] == '\0')
         {
           print_err(line);
           // exit
