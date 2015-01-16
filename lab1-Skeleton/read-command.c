@@ -118,11 +118,12 @@ bool if_check(const char *word)
   return true;
 }
 
+// Needs updating
 bool fi_check(const char *word, int iter)
 {
   for(int i = 0; i < 3; i++)
   {
-    if (word[iter + i] == fi_cmd[i] || (i == 2 && (word[i] == '\n' || word[i] == EOF))
+    if (word[iter + i] == fi_cmd[i] || (i == 2 && (word[i] == '\n' || word[i] == ';' || word[i] == '\0'))
       continue;
     else return false;
   }
@@ -155,7 +156,7 @@ bool done_check(const char *word)
 {
   for(int i = 0; i < 5; i++)
   {
-    if (word[i] == done_cmd[i] || (i == 2 && (word[i] == '\n' || word[i] == EOF))
+    if (word[i] == done_cmd[i] || (i == 2 && (word[i] == '\n' || word[i] == ';' || word[i] == '\0'))
       continue;
     else return false;
   }
@@ -173,15 +174,18 @@ make_command_stream (int (*get_next_byte) (void *),
 		     void *get_next_byte_argument)
 {
   char c;
-  char check_c;
   char* buffer;
   char* char_stream;
-  char* check_stream[5];
+  char* check_stream[6];
   int buffer_size = 1024;
   int line = 1;
   int it = 0;
+  int counter = 0;
+  int check;
+  int paren_count = 1;
+  bool found_right_paren = false;
   bool newline_enc = false;
-  enum token_type cmd_token;
+  enum command_type cmd_type;
 
   // Initialize
   command_stream_t cmd_stream = init_command_stream();
@@ -209,9 +213,13 @@ make_command_stream (int (*get_next_byte) (void *),
       // newline can only precede ( ) if then else fi while do done until and first word of simple command
       // newline can follow any special token other than < >
     // take a command
-    // check syntax for command
+    // check if command has proper beginning & end
+      // if it doesn't, report error and quit
+    // add command to stream
+    // check all commands for syntax
       // if invalid syntax, report error and exit
-    // add command to node
+    // do a second pass and handle redirects
+    // note: fix allocation for char_stream
 
   for(int i = 0; i < strlen(buffer); i++)
   {
@@ -221,74 +229,161 @@ make_command_stream (int (*get_next_byte) (void *),
        storing bytes into char_stream until you hit corresponding
        fi or done. Then, insert char_stream into a command node
        and reset. */
-    if (newline_enc)
+    // character check
+    if (!is_word(char_stream[it] || !is_token(char_stream[it]) ||
+        char_stream[it] != ' ' || char_stream[it] != '\n' ||
+        char_stream[it] != '\t' || char_stream[it] != '\0')
     {
-      switch(c)
+      print_err(line);
+      // exit
+    }
+    // if-while-until check
+    if (newline_enc || i == 0)
+    {
+      check = i;
+      switch(char_stream[it])
       {
         case 'i':
-          for (; it < 3; it++)
-            char_stream[it] = buffer[i];
-          if (if_check(char_stream))
-            for(; i < strlen(buffer) && buffer[i] != EOF; i++)
+          for (int j = 0; j < 3; j++)
+          {
+            check_stream[j] = buffer[check];
+            check++;
+          }
+          if (if_check(check_stream))
+          {
+            for(; i < strlen(buffer) && buffer[i] != '\0'; i++)
             {
               char_stream[it] = buffer[i];
-              if (buffer[i] == '\n')
+              check = i;
+              for (int j = 0; j < 3; j++)
               {
+                check_stream[j] = buffer[check];
+                check++;
+              }
+              if (if_check(check_stream))
+                counter++;
+              if (char_stream[it] == '\n')
+              {
+                line++;
                 if (fi_check(buffer, i + 1))
-                {
-                  char_stream[it + 1] = 'f';
-                  char_stream[it + 2] = 'i';
-                  // insert and reset and break
-                }
-                print_err(line);
+                  counter--;
               }
+              if (counter == 0)
+              {
+                for (int k = 1; k < 4; k++)
+                  char_stream[it + k] = buffer[i + k];
+                it += 3;
+                i += 3;
+                cmd_type = IF_COMMAND;
+                insert_cmd(char_stream, cmd_type, cmd_stream);
+                memset(char_stream, '\0', strlen(char_stream));
+                memset(check_stream, '\0' strlen(check_stream));
+                break;
+              }
+              it++;
             }
+            if (char_stream[it] == '\0' && counter != 0)
+            {
+              print_err(line);
+              // exit
+            }
+          }
         case 'w':
-          for (; it < 6; it++)
-            char_stream[it] = buffer[i];
-          if (while_check(char_stream))
-            for(; i < strlen(buffer) && buffer[i] != EOF; i++)
+          for (int j = 0; j < 6; j++)
+          {
+            check_stream[j] = buffer[check];
+            check++;
+          }
+          if (while_check(check_stream))
+          {
+            for(; i < strlen(buffer) && buffer[i] != '\0'; i++)
             {
               char_stream[it] = buffer[i];
-              if (buffer[i] == '\n')
+              check = i;
+              for (int j = 0; j < 6; j++)
               {
-                if (done_check(buffer, i + 1))
-                {
-                  char_stream[it + 1] = 'd';
-                  char_stream[it + 2] = 'o';
-                  char_stream[it + 3] = 'n';
-                  char_stream[it + 4] = 'e';
-                  // insert and reset and break
-                }
-                print_err(line);
+                check_stream[j] = buffer[check];
+                check++;
               }
+              if (while_check(check_stream))
+                counter++;
+              if (char_stream[it] == '\n')
+              {
+                line++;
+                if (done_check(buffer, i + 1))
+                  counter--;
+              }
+              if (counter == 0)
+              {
+                for (int k = 1; k < 6; k++)
+                  char_stream[it + k] = buffer[i + k];
+                it += 6;
+                i += 6;
+                cmd_type = WHILE_COMMAND;
+                insert_cmd(char_stream, cmd_type, cmd_stream);
+                memset(char_stream, '\0', strlen(char_stream));
+                memset(check_stream, '\0' strlen(check_stream));
+                break;
+              }
+              it++;
             }
+            if (char_stream[it] == '\0' && counter != 0)
+            {
+              print_err(line);
+              // exit
+            }
+          }
         case 'u':
-          for (; it < 6; it++)
-            char_stream[it] = buffer[i];
-          if (while_check(char_stream))
-            for(; i < strlen(buffer) && buffer[i] != EOF; i++)
+          for (int j = 0; j < 6; j++)
+          {
+            check_stream[j] = buffer[check];
+            check++;
+          }
+          if (until_check(check_stream))
+          {
+            for(; i < strlen(buffer) && buffer[i] != '\0'; i++)
             {
               char_stream[it] = buffer[i];
-              if (buffer[i] == '\n')
+              check = i;
+              for (int j = 0; j < 6; j++)
               {
-                if (done_check(buffer, i + 1))
-                {
-                  char_stream[it + 1] = 'd';
-                  char_stream[it + 2] = 'o';
-                  char_stream[it + 3] = 'n';
-                  char_stream[it + 4] = 'e';
-                  //insert and reset and break
-                }
-                print_err(line);
+                check_stream[j] = buffer[check];
+                check++;
               }
+              if (until_check(check_stream))
+                counter++;
+              if (char_stream[it] == '\n')
+              {
+                line++;
+                if (done_check(buffer, i + 1))
+                  counter--;
+              }
+              if (counter == 0)
+              {
+                for (int k = 1; k < 6; k++)
+                  char_stream[it + k] = buffer[i + k];
+                it += 6;
+                i += 6;
+                cmd_type = WHILE_COMMAND;
+                insert_cmd(char_stream, cmd_type, cmd_stream);
+                memset(char_stream, '\0', strlen(char_stream));
+                memset(check_stream, '\0' strlen(check_stream));
+                break;
+              }
+              it++;
             }
+            if (char_stream[it] == '\0' && counter != 0)
+            {
+              print_err(line);
+              // exit
+            }
+          }
         default:
           break;
       }
       newline_enc = false;
     }
-    // semi-colon behavior
+    // comment behavior
     // newline behavior
     if (char_stream[it] == '\n')
     {
@@ -296,7 +391,72 @@ make_command_stream (int (*get_next_byte) (void *),
       newline_enc = true;
       continue;
     }
-    // comment behavior
+    // semi-colon behavior
+    if (char_stream[it] == ';')
+    {
+      if (it == 0)
+      {
+        print_err(line);
+        // exit
+      }
+      <;
+      for(; char_stream[it] != '\n' && char_stream[it] != ' ' && char_stream[it] != '\0'; it++)
+      {
+        if (char_stream[it - 1] == ';' || char_stream[it - 1] == '\n' ||
+            char_stream[it - 1] == '|' || char_stream[it - 1] == '<' ||
+            char_stream[it - 1] == '>' || char_stream[it - 1] == '(')
+        {
+          print_err(line);
+          // exit
+        }
+        char_stream[it] = buffer[i];
+        i++;
+      }
+    }
+    // pipe behavior
+    if (char_stream[it] == '|')
+    {
+      if (it == 0)
+      {
+        print_err(line);
+        // exit
+      }
+      for(; char_stream[it] != '\n' && char_stream[it] != ';' && char_stream[it] != '\0'; it++)
+      {
+        char_stream[it] = buffer[i];
+        i++;
+      }
+      cmd_type = PIPE_COMMAND;
+      insert_cmd(char_stream, cmd_type, cmd_stream);
+      memset(char_stream, '\0', strlen(char_stream));
+      continue;
+    }
+    // subshell behavior
+    if (char_stream[it] == '(')
+    {
+      paren_count++;
+      while(!found_right_paren)
+      {
+        it++;
+        i++;
+        char_stream[it] = buffer[i];
+        if(char_stream[it] == '(')
+          paren_count++;
+        if(char_stream[it] == ')')
+          paren_count--;
+        if(paren_count == 0)
+          found_right_paren = true;
+        if(char_stream[it] == '\n' && char_stream[it] == ';' && char_stream[it] == '\0')
+        {
+          print_err(line);
+          // exit
+        }
+      }
+      cmd_type = SUBSHELL_COMMAND;
+      insert_cmd(char_stream, cmd_type, cmd_stream);
+      memset(char_stream, '\0', strlen(char_stream));
+    }
+    it++;
   }
   return cmd_stream;
 }
