@@ -135,7 +135,8 @@ command_t make_simple_cmd(char *word)
   new_cmd->type = SIMPLE_COMMAND;
   new_cmd->status = -1;
   new_cmd->u.word = (char**) checked_malloc(sizeof(char*));
-  new_cmd->u.word[0] = word;
+  *new_cmd->u.word = word;
+  printf("the command is:\n%s\n", *new_cmd->u.word);
   for (size_t i = 0; i < strlen(word); i++)
   {
     if (word[i] == '<')
@@ -197,11 +198,9 @@ command_t make_simple_cmd(char *word)
 
 command_t make_cmd(char *word, enum command_type cmd_type)
 {
-  char* mini_buffer = (char*) checked_malloc(strlen(word) + 1);
   char* mini_char = (char*) checked_malloc(strlen(word) + 1);
   char* subshell_cmd = (char*) checked_malloc(strlen(word) + 1);
   char mini_check[6];
-  mini_buffer = word;
   int check = 0;
   int it = 0;
   int counter = 0;
@@ -210,8 +209,6 @@ command_t make_cmd(char *word, enum command_type cmd_type)
   new_cmd->status = -1;
   new_cmd->input = NULL;
   new_cmd->output = NULL;
-  //new_cmd->u.word = (char**) checked_malloc(sizeof(char*));
-  //new_cmd->u.word[0] = mini_buffer;
   for(int i = 0; i < 3; i++)
     new_cmd->u.command[i] = NULL;
   switch(cmd_type)
@@ -224,24 +221,22 @@ command_t make_cmd(char *word, enum command_type cmd_type)
       bool while_found = false;
       bool until_found = false;
       bool subshell_made = false;
-      new_cmd->u.word = (char**) checked_malloc(sizeof(char*));
-      new_cmd->u.word[0] = mini_buffer;
       int sub_count = 0;
       size_t i = 0;
-      if (mini_buffer[0] == '\n' || mini_buffer[0] == ' ' || mini_buffer[0] == '\t')
+      if (word[0] == '\n' || word[0] == ' ' || word[0] == '\t')
       {
-        for (; !is_word(mini_buffer[i]) && !is_token(mini_buffer[i]); i++);
+        for (; !is_word(word[i]) && !is_token(word[i]); i++);
         i += 2;
       }
       else i = 2;
-      for (; i < strlen(mini_buffer); i++)
+      for (; i < strlen(word); i++)
       {
         // then/else/fi to delimit commands
-        if (mini_buffer[i] == 't')
-          if (mini_buffer[i + 1] == 'h')
-            if (mini_buffer[i + 2] == 'e')
-              if (mini_buffer[i + 3] == 'n')
-                if (mini_buffer[i + 4] == ' ' || mini_buffer[i + 4] == '\n')
+        if (word[i] == 't')
+          if (word[i + 1] == 'h')
+            if (word[i + 2] == 'e')
+              if (word[i + 3] == 'n')
+                if (word[i + 4] == ' ' || word[i + 4] == '\n')
                 {
                   if (subshell_made)
                     break;
@@ -277,11 +272,11 @@ command_t make_cmd(char *word, enum command_type cmd_type)
                   i += 3;
                   continue;
                 }
-        if (mini_buffer[i] == 'e')
-          if (mini_buffer[i + 1] == 'l')
-            if (mini_buffer[i + 2] == 's')
-              if (mini_buffer[i + 3] == 'e')
-                if (mini_buffer[i + 4] == ' ' || mini_buffer[i + 4] == '\n')
+        if (word[i] == 'e')
+          if (word[i + 1] == 'l')
+            if (word[i + 2] == 's')
+              if (word[i + 3] == 'e')
+                if (word[i + 4] == ' ' || word[i + 4] == '\n')
                 {
                   if (subshell_made)
                     break;
@@ -317,10 +312,10 @@ command_t make_cmd(char *word, enum command_type cmd_type)
                   i += 3;
                   continue;
                 }
-        if (mini_buffer[i] == 'f')
-          if (mini_buffer[i+1] == 'i')
-            if (mini_buffer[i+2] == ' ' || mini_buffer[i+2] == '\n' ||
-                mini_buffer[i+2] == '\0')
+        if (word[i] == 'f')
+          if (word[i+1] == 'i')
+            if (word[i+2] == ' ' || word[i+2] == '\n' ||
+                word[i+2] == '\0')
             {
               if (sequence_found)
               {
@@ -351,37 +346,37 @@ command_t make_cmd(char *word, enum command_type cmd_type)
                 new_cmd->u.command[2] = make_cmd(mini_char, SIMPLE_COMMAND);
               break;
             }
-        mini_char[it] = mini_buffer[i];
+        mini_char[it] = word[i];
         // if-while-until check
         check = i;
-        switch (mini_buffer[i])
+        switch (word[i])
         {
           case 'i':
           {
             for (int j = 0; j < 3; j++)
             {
-              mini_check[j] = mini_buffer[check];
+              mini_check[j] = word[check];
               check++;
             }
             if (if_check(mini_check, 0))
-              for(; i < strlen(mini_buffer) && mini_buffer[i] != '\0'; i++)
+              for(; i < strlen(word) && word[i] != '\0'; i++)
               {
-                mini_char[it] = mini_buffer[i];
+                mini_char[it] = word[i];
                 check = i;
                 for (int j = 0; j < 3; j++)
                 {
-                  mini_check[j] = mini_buffer[check];
+                  mini_check[j] = word[check];
                   check++;
                 }
                 if (if_check(mini_check, 0))
                   counter++;
-                if (mini_buffer[i] == 'f')
-                  if(fi_check(mini_buffer, i))
+                if (word[i] == 'f')
+                  if(fi_check(word, i))
                       counter--;
                 if (counter == 0)
                 {
                   for (int k = 0; k < 2; k++)
-                    mini_char[it + k] = mini_buffer[i + k];
+                    mini_char[it + k] = word[i + k];
                   it += 2;
                   i += 2;
                   if_found = true;
@@ -395,30 +390,30 @@ command_t make_cmd(char *word, enum command_type cmd_type)
           {
             for (int j = 0; j < 6; j++)
             {
-              mini_check[j] = mini_buffer[check];
+              mini_check[j] = word[check];
               check++;
             }
             if (while_check(mini_check, 0))
-              for(; i < strlen(mini_buffer) && mini_buffer[i] != '\0'; i++)
+              for(; i < strlen(word) && word[i] != '\0'; i++)
               {
-                mini_char[it] = mini_buffer[i];
+                mini_char[it] = word[i];
                 check = i;
                 for (int j = 0; j < 6; j++)
                 {
-                  mini_check[j] = mini_buffer[check];
+                  mini_check[j] = word[check];
                   check++;
                 }
                 if (while_check(mini_check, 0))
                   counter++;
                 if (until_check(mini_check, 0))
                   counter++;
-                if (mini_buffer[i] == 'd')
-                  if (done_check(mini_buffer, i))
+                if (word[i] == 'd')
+                  if (done_check(word, i))
                     counter--;
                 if (counter == 0)
                 {
                   for (int k = 0; k < 4; k++)
-                    mini_char[it + k] = mini_buffer[i + k];
+                    mini_char[it + k] = word[i + k];
                   it += 4;
                   i += 4;
                   while_found = true;
@@ -432,30 +427,30 @@ command_t make_cmd(char *word, enum command_type cmd_type)
           {
             for (int j = 0; j < 6; j++)
             {
-              mini_check[j] = mini_buffer[check];
+              mini_check[j] = word[check];
               check++;
             }
             if (until_check(mini_check, 0))
-              for(; i < strlen(mini_buffer) && mini_buffer[i] != '\0'; i++)
+              for(; i < strlen(word) && word[i] != '\0'; i++)
               {
-                mini_char[it] = mini_buffer[i];
+                mini_char[it] = word[i];
                 check = i;
                 for (int j = 0; j < 6; j++)
                 {
-                  mini_check[j] = mini_buffer[check];
+                  mini_check[j] = word[check];
                   check++;
                 }
                 if (until_check(mini_check, 0))
                   counter++;
                 if (while_check(mini_check, 0))
                   counter++;
-                if (mini_buffer[i] == 'd')
-                  if (done_check(mini_buffer, i))
+                if (word[i] == 'd')
+                  if (done_check(word, i))
                     counter--;
                 if (counter == 0)
                 {
                   for (int k = 0; k < 4; k++)
-                    mini_char[it + k] = mini_buffer[i + k];
+                    mini_char[it + k] = word[i + k];
                   it += 4;
                   i += 4;
                   until_found = true;
@@ -470,10 +465,10 @@ command_t make_cmd(char *word, enum command_type cmd_type)
         if (mini_char[it] == ';')
         {
           int sc_marker = 0;
-          for(; mini_buffer[i] != '\n' && mini_buffer[i] != ' ' &&
-                mini_buffer[i + 1] != '\0'; it++)
+          for(; word[i] != '\n' && word[i] != ' ' &&
+                word[i + 1] != '\0'; it++)
           {
-            mini_char[it] = mini_buffer[i];
+            mini_char[it] = word[i];
             i++;
             sc_marker++;
           }
@@ -489,13 +484,13 @@ command_t make_cmd(char *word, enum command_type cmd_type)
           int p = 0;
           for (;; p++)
           {
-            if (mini_buffer[i+p] == '(')
+            if (word[i+p] == '(')
               sub_count++;
-            if (mini_buffer[i+p+1] == ')')
+            if (word[i+p+1] == ')')
               sub_count--;
             if (sub_count == 0)
               break;
-            subshell_cmd[p] = mini_buffer[i+p+1];
+            subshell_cmd[p] = word[i+p+1];
             it++;
           }
           for (int u = 0; u < 3; u++)
@@ -524,22 +519,20 @@ command_t make_cmd(char *word, enum command_type cmd_type)
       bool until_found = false;
       bool subshell_made = false;
       int sub_count = 0;
-      new_cmd->u.word = (char**) checked_malloc(sizeof(char*));
-      new_cmd->u.word[0] = mini_buffer;
       size_t i = 0;
-      if (mini_buffer[0] == '\n' || mini_buffer[0] == ' ' || mini_buffer[0] == '\t')
+      if (word[0] == '\n' || word[0] == ' ' || word[0] == '\t')
       {
-        for (; !is_word(mini_buffer[i]) && !is_token(mini_buffer[i]); i++);
+        for (; !is_word(word[i]) && !is_token(word[i]); i++);
         i += 5;
       }
       else i = 5;
-      for (; i < strlen(mini_buffer); i++)
+      for (; i < strlen(word); i++)
       {
         // do/done to delimit commands
-        if (mini_buffer[i] == 'd')
-          if (mini_buffer[i + 1] == 'o')
+        if (word[i] == 'd')
+          if (word[i + 1] == 'o')
           {
-            if (mini_buffer[i + 2] == ' ' || mini_buffer[i + 2] == '\n')
+            if (word[i + 2] == ' ' || word[i + 2] == '\n')
             {
               if (subshell_made)
                 break;
@@ -575,10 +568,10 @@ command_t make_cmd(char *word, enum command_type cmd_type)
               i += 2;
               continue;
             }
-            if (mini_buffer[i + 2] == 'n')
-              if (mini_buffer[i + 3] == 'e')
-                if (mini_buffer[i + 4] == ' ' || mini_buffer[i + 4] == '\n' ||
-                    mini_buffer[i + 4] == '\0')
+            if (word[i + 2] == 'n')
+              if (word[i + 3] == 'e')
+                if (word[i + 4] == ' ' || word[i + 4] == '\n' ||
+                    word[i + 4] == '\0')
                 {
                   if (subshell_made)
                     break;
@@ -612,37 +605,37 @@ command_t make_cmd(char *word, enum command_type cmd_type)
                   break;
                 }
           }
-        mini_char[it] = mini_buffer[i];
+        mini_char[it] = word[i];
         // if-while-until check
         check = i;
-        switch (mini_buffer[i])
+        switch (word[i])
         {
           case 'i':
           {
             for (int j = 0; j < 3; j++)
             {
-              mini_check[j] = mini_buffer[check];
+              mini_check[j] = word[check];
               check++;
             }
             if (if_check(mini_check, 0))
-              for(; i < strlen(mini_buffer) && mini_buffer[i] != '\0'; i++)
+              for(; i < strlen(word) && word[i] != '\0'; i++)
               {
-                mini_char[it] = mini_buffer[i];
+                mini_char[it] = word[i];
                 check = i;
                 for (int j = 0; j < 3; j++)
                 {
-                  mini_check[j] = mini_buffer[check];
+                  mini_check[j] = word[check];
                   check++;
                 }
                 if (if_check(mini_check, 0))
                   counter++;
-                if (mini_buffer[i] == 'f')
-                  if(fi_check(mini_buffer, i))
+                if (word[i] == 'f')
+                  if(fi_check(word, i))
                       counter--;
                 if (counter == 0)
                 {
                   for (int k = 0; k < 2; k++)
-                    mini_char[it + k] = mini_buffer[i + k];
+                    mini_char[it + k] = word[i + k];
                   it += 2;
                   i += 2;
                   if_found = true;
@@ -656,30 +649,30 @@ command_t make_cmd(char *word, enum command_type cmd_type)
           {
             for (int j = 0; j < 6; j++)
             {
-              mini_check[j] = mini_buffer[check];
+              mini_check[j] = word[check];
               check++;
             }
             if (while_check(mini_check, 0))
-              for(; i < strlen(mini_buffer) && mini_buffer[i] != '\0'; i++)
+              for(; i < strlen(word) && word[i] != '\0'; i++)
               {
-                mini_char[it] = mini_buffer[i];
+                mini_char[it] = word[i];
                 check = i;
                 for (int j = 0; j < 6; j++)
                 {
-                  mini_check[j] = mini_buffer[check];
+                  mini_check[j] = word[check];
                   check++;
                 }
                 if (while_check(mini_check, 0))
                   counter++;
                 if (until_check(mini_check, 0))
                   counter++;
-                if (mini_buffer[i] == 'd')
-                  if (done_check(mini_buffer, i))
+                if (word[i] == 'd')
+                  if (done_check(word, i))
                     counter--;
                 if (counter == 0)
                 {
                   for (int k = 0; k < 4; k++)
-                    mini_char[it + k] = mini_buffer[i + k];
+                    mini_char[it + k] = word[i + k];
                   it += 4;
                   i += 4;
                   while_found = true;
@@ -693,30 +686,30 @@ command_t make_cmd(char *word, enum command_type cmd_type)
           {
             for (int j = 0; j < 6; j++)
             {
-              mini_check[j] = mini_buffer[check];
+              mini_check[j] = word[check];
               check++;
             }
             if (until_check(mini_check, 0))
-              for(; i < strlen(mini_buffer) && mini_buffer[i] != '\0'; i++)
+              for(; i < strlen(word) && word[i] != '\0'; i++)
               {
-                mini_char[it] = mini_buffer[i];
+                mini_char[it] = word[i];
                 check = i;
                 for (int j = 0; j < 6; j++)
                 {
-                  mini_check[j] = mini_buffer[check];
+                  mini_check[j] = word[check];
                   check++;
                 }
                 if (until_check(mini_check, 0))
                   counter++;
                 if (while_check(mini_check, 0))
                   counter++;
-                if (mini_buffer[i] == 'd')
-                  if (done_check(mini_buffer, i))
+                if (word[i] == 'd')
+                  if (done_check(word, i))
                     counter--;
                 if (counter == 0)
                 {
                   for (int k = 0; k < 4; k++)
-                    mini_char[it + k] = mini_buffer[i + k];
+                    mini_char[it + k] = word[i + k];
                   it += 4;
                   i += 4;
                   until_found = true;
@@ -731,10 +724,10 @@ command_t make_cmd(char *word, enum command_type cmd_type)
         if (mini_char[it] == ';')
         {
           int sc_marker = 0;
-          for(; mini_buffer[i] != '\n' && mini_buffer[i] != ' ' &&
-                mini_buffer[i + 1] != '\0'; it++)
+          for(; word[i] != '\n' && word[i] != ' ' &&
+                word[i + 1] != '\0'; it++)
           {
-            mini_char[it] = mini_buffer[i];
+            mini_char[it] = word[i];
             i++;
             sc_marker++;
           }
@@ -750,13 +743,13 @@ command_t make_cmd(char *word, enum command_type cmd_type)
           int p = 0;
           for (;; p++)
           {
-            if (mini_buffer[i+p] == '(')
+            if (word[i+p] == '(')
               sub_count++;
-            if (mini_buffer[i+p+1] == ')')
+            if (word[i+p+1] == ')')
               sub_count--;
             if (sub_count == 0)
               break;
-            subshell_cmd[p] = mini_buffer[i+p+1];
+            subshell_cmd[p] = word[i+p+1];
             it++;
           }
           for (int u = 0; u < 3; u++)
@@ -782,15 +775,13 @@ command_t make_cmd(char *word, enum command_type cmd_type)
       int sub_count = 0;
       char* left_cmd;
       char* right_cmd = (char*) checked_malloc(strlen(mini_char) + 1);
-      new_cmd->u.word = (char**) checked_malloc(sizeof(char*));
-      new_cmd->u.word[0] = mini_buffer;
       size_t i = 0;
-      if (mini_buffer[0] == '\n' || mini_buffer[0] == ' ' || mini_buffer[0] == '\t')
-        for (; !is_word(mini_buffer[i]) && !is_token(mini_buffer[i]); i++);
-      for (; i < strlen(mini_buffer); i++)
+      if (word[0] == '\n' || word[0] == ' ' || word[0] == '\t')
+        for (; !is_word(word[i]) && !is_token(word[i]); i++);
+      for (; i < strlen(word); i++)
       {
-        mini_char[it] = mini_buffer[i];
-        if (mini_char[it] == '\n' || mini_buffer[it + 1] == '\0')
+        mini_char[it] = word[i];
+        if (mini_char[it] == '\n' || word[it + 1] == '\0')
         {
           for (int j = it; j > -1; j--)
           {
@@ -821,10 +812,10 @@ command_t make_cmd(char *word, enum command_type cmd_type)
         if (mini_char[it] == ';')
         {
           int sc_marker = 0;
-          for(; mini_buffer[i] != '\n' && mini_buffer[i] != ' ' &&
-                mini_buffer[i+1] != '\0'; it++)
+          for(; word[i] != '\n' && word[i] != ' ' &&
+                word[i+1] != '\0'; it++)
           {
-            mini_char[it] = mini_buffer[i];
+            mini_char[it] = word[i];
             i++;
             sc_marker++;
           }
@@ -909,15 +900,13 @@ command_t make_cmd(char *word, enum command_type cmd_type)
       int sub_count = 0;
       char* left_cmd;
       char* right_cmd = (char*) checked_malloc(strlen(mini_char) + 1);
-      new_cmd->u.word = (char**) checked_malloc(sizeof(char*));
-      new_cmd->u.word[0] = mini_buffer;
       size_t i = 0;
-      if (mini_buffer[0] == '\n' || mini_buffer[0] == ' ' || mini_buffer[0] == '\t')
-        for (; !is_word(mini_buffer[i]) && !is_token(mini_buffer[i]); i++);
-      for (; i < strlen(mini_buffer); i++)
+      if (word[0] == '\n' || word[0] == ' ' || word[0] == '\t')
+        for (; !is_word(word[i]) && !is_token(word[i]); i++);
+      for (; i < strlen(word); i++)
       {
-        mini_char[it] = mini_buffer[i];
-        if (mini_char[it] == '\n' || mini_buffer[it + 1] == '\0')
+        mini_char[it] = word[i];
+        if (mini_char[it] == '\n' || word[it + 1] == '\0')
         {
           for (int j = it; j > -1; j--)
           {
@@ -948,12 +937,12 @@ command_t make_cmd(char *word, enum command_type cmd_type)
         if (mini_char[it] == ';')
         {
           int sc_marker = 0;
-          for(; mini_buffer[i] != '\n' && mini_buffer[i] != ' ' &&
-                mini_buffer[i+1] != '\0'; it++)
+          for(; word[i] != '\n' && word[i] != ' ' &&
+                word[i+1] != '\0'; it++)
           {
-            mini_char[it] = mini_buffer[i];
+            mini_char[it] = word[i];
             i++;
-            if (mini_buffer[i] == ';')
+            if (word[i] == ';')
               sc_marker++;
           }
           seqs = sc_marker;
@@ -1032,15 +1021,13 @@ command_t make_cmd(char *word, enum command_type cmd_type)
       bool sequence_found = false;
       bool pipe_found = false;
       int sub_count = 0;
-      new_cmd->u.word = (char**) checked_malloc(sizeof(char*));
-      new_cmd->u.word[0] = mini_buffer;
       size_t i = 0;
-      if (mini_buffer[0] == '\n' || mini_buffer[0] == ' ' || mini_buffer[0] == '\t')
-        for (; !is_word(mini_buffer[i]) && !is_token(mini_buffer[i]); i++);
-      for (; i < strlen(mini_buffer); i++)
+      if (word[0] == '\n' || word[0] == ' ' || word[0] == '\t')
+        for (; !is_word(word[i]) && !is_token(word[i]); i++);
+      for (; i < strlen(word); i++)
       {
-        mini_char[it] = mini_buffer[i];
-        if (mini_char[it] == '\n' || mini_buffer[it + 1] == '\0')
+        mini_char[it] = word[i];
+        if (mini_char[it] == '\n' || word[it + 1] == '\0')
         {
           if (pipe_found)
             new_cmd->u.command[0] = make_cmd(mini_char, PIPE_COMMAND);
@@ -1054,10 +1041,10 @@ command_t make_cmd(char *word, enum command_type cmd_type)
         if (mini_char[it] == ';')
         {
           int sc_marker = 0;
-          for(; mini_buffer[i] != '\n' && mini_buffer[i] != ' ' &&
-                mini_buffer[i + 1] != '\0'; it++)
+          for(; word[i] != '\n' && word[i] != ' ' &&
+                word[i + 1] != '\0'; it++)
           {
-            mini_char[it] = mini_buffer[i];
+            mini_char[it] = word[i];
             i++;
             sc_marker++;
           }
@@ -1111,22 +1098,16 @@ command_t make_cmd(char *word, enum command_type cmd_type)
       break;
     }
   }
-  //printf("the command is:\n%s\n", mini_buffer);
-  /*if(mini_char)
+  if(mini_char)
   {
     free(mini_char);
     mini_char = NULL;
-  }*/
-  /*if(mini_buffer)
-  {
-    free(mini_buffer);
-    mini_buffer = NULL;
-  }*/
-  /*if(subshell_cmd)
+  }
+  if(subshell_cmd)
   {
     free(subshell_cmd);
     subshell_cmd = NULL;
-  }*/
+  }
   return new_cmd;
 }
 
@@ -1146,9 +1127,7 @@ void insert_cmd(char *word, enum command_type cmd_type, command_stream_t cmd_str
     cmd_stream->m_curr->m_next = new_node;
     cmd_stream->m_curr = new_node;
   }
-  //printf("current cmd: %s\n", new_node->m_command->u.word[0]);
   cmd_total++;
-  //printf("%d total commands\n", cmd_total);
 }
 
 // Initialization
@@ -1843,16 +1822,16 @@ make_command_stream (int (*get_next_byte) (void *),
     }
     it++;
   }
-  /*if(char_stream)
+  if(char_stream)
   {
     free(char_stream);
     char_stream = NULL;
-  }*/
-  /*if(buffer)
+  }
+  if(buffer)
   {
     free(buffer);
     buffer = NULL;
-  }*/
+  }
   return cmd_stream;
 }
 
@@ -1861,26 +1840,26 @@ read_command_stream (command_stream_t s)
 {
   if (cmd_read == cmd_total)
     return NULL;
-  if (s->m_head != NULL)
+  if (s->m_head)
   {
-    //node_t cmd_node = (node_t) checked_malloc(sizeof(struct node));
-//    cmd_node = s->m_head;
-//    command_t cmd = (command_t) checked_malloc(sizeof(struct command));
-//    cmd = s->m_head->m_command;
-//    s->m_head = s->m_head->m_next;
-//    if (cmd_node->m_command)
-//    free_cmd(cmd_node->m_command);
-//    if(cmd_node)
-//    {
-//      free(cmd_node);
-//      cmd_node = NULL;
-//    }
-//    cmd_read++;
-//    printf("command received\n");
-//    printf("commands read: %d\n", cmd_read);
-//    //printf("the command is %s\n", cmd->u.word[0]);
-//    return cmd;
-    return NULL;
+    node_t cmd_node = (node_t) checked_malloc(sizeof(struct node));
+    cmd_node = s->m_head;
+    command_t cmd = (command_t) checked_malloc(sizeof(struct command));
+    cmd = s->m_head->m_command;
+    s->m_head = s->m_head->m_next;
+    if (cmd_node->m_command)
+    //free_cmd(cmd_node->m_command);
+    //if(cmd_node)
+    //{
+    //  free(cmd_node);
+    //  cmd_node = NULL;
+    //}
+    cmd_read++;
+    printf("command received\n");
+    printf("commands read: %d\n", cmd_read);
+    //printf("the command is %s\n", cmd->u.word[0]);
+    return cmd;
+    //return NULL;
   }
   fprintf(stderr, "Could not read command");
   exit(-1);
