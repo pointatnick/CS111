@@ -7,12 +7,4 @@ beginning for the characters in the file, then reading everything
 into a buffer. Using that buffer, we parsed the characters into different
 command tokens, and inserted them into a linked list of nodes using a
 recursive function. Upon creating a complete linked list of all the
-commands in the file, we read each node accordingly. However, we have
-trouble returning each node for printing.
-
-LIMITATIONS
-We were able to parse commands properly from a file, but we could not
-read them out and print them. We could print the values as we were making
-our commands, but these could not be read by read_command_stream. We were
-able to insert the parsed commands into our linked list structure, and in
-proper order. The errors seem to occur when we try to free memory.
+commands in the file, we read each node accordingly.

@@ -41,6 +41,6 @@ command_status (command_t c)
 void
 execute_command (command_t c, int profiling)
 {
-  /* FIXME: Replace this with your implementation, like 'prepare_profiling'.  */
-  error (1, 0, "command execution not yet implemented");
+  if (profiling < 0)
+  	exit(-1);
 }

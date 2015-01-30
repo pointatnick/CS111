@@ -35,11 +35,20 @@ void free_cmd(command_t cmd)
 {
   if (cmd == NULL)
     return;
-  free(cmd->u.word);
-  free_cmd(cmd->u.command[0]);
-  free_cmd(cmd->u.command[1]);
-  free_cmd(cmd->u.command[2]);
+  if (cmd->u.word)
+  {
+    free(cmd->u.word);
+    cmd->u.word = NULL;
+  }
+  for (int i = 0; i < 3; i++)
+    if (cmd->u.command[i])
+    {
+      free_cmd(cmd->u.command[i]);
+      cmd->u.command[i] = NULL;
+    }
   free(cmd);
+  cmd = NULL;
+  return;
 }
 
 // Syntax checks
@@ -127,54 +136,78 @@ void print_err(int line)
 
 command_t make_simple_cmd(char *word)
 {
-  char* input_stream = (char*) checked_malloc(sizeof(char));
-  char* output_stream = (char*) checked_malloc(sizeof(char));
+  char* input_stream = (char*) checked_malloc(strlen(word)+1);
+  char* output_stream = (char*) checked_malloc(strlen(word)+1);
+  char* cmd_word = (char*) checked_malloc(strlen(word)+1);
+  size_t p = 0;
+  size_t inpos = 0;
+  size_t outpos = 0;
+  if (word[0] == '\n' || word[0] == ' ' || word[0] == '\t')
+    for (; !is_word(word[p]) && !is_token(word[p]); p++);
+  for (size_t i = 0; word[p] != ';' && word[p] != '\0' && word[p] != '\n'; i++, p++)
+    cmd_word[i] = word[p];
   bool input_filled = false;
   bool output_filled = false;
   command_t new_cmd = (command_t) checked_malloc(sizeof(struct command));
   new_cmd->type = SIMPLE_COMMAND;
   new_cmd->status = -1;
-  new_cmd->u.word = (char**) checked_malloc(sizeof(char*));
-  *new_cmd->u.word = word;
-  printf("the command is:\n%s\n", *new_cmd->u.word);
-  for (size_t i = 0; i < strlen(word); i++)
-  {
-    if (word[i] == '<')
+  for (size_t i = 0; i < strlen(cmd_word); i++)
+    if (cmd_word[i] == '<')
     {
+      if (cmd_word[i+1] == ' ')
+        for (size_t m = i; cmd_word[m] != '\0'; m++)
+          cmd_word[m+1] = cmd_word[m+2];
+      if (cmd_word[i-1] == ' ')
+        for (size_t m = i-1; cmd_word[m] != '\0'; m++)
+          cmd_word[m] = cmd_word[m+1];
+      for (i = 0; cmd_word[i] != '<'; i++);
+      inpos = i;
       int k = 0;
-      for (int j = i - 1; j > -1; j--)
+      for (size_t j = i+1; j < strlen(cmd_word); j++, k++)
       {
-        if (word[j] == ' ' || word[j] == '\n' || word[j] == '\t')
+        if (cmd_word[j] == ' ' || cmd_word[j] == '\n' ||
+            cmd_word[j] == '>' || cmd_word[j] == '\t')
           break;
         else
         {
-          input_stream[k] = word[j];
+          input_stream[k] = cmd_word[j];
           input_filled = true;
         }
-        k++;
       }
+      input_stream[k+1] = '\0';
       break;
     }
-  }
-  for (size_t i = 0; i < strlen(word); i++)
-  {
-    if (word[i] == '>')
+  for (size_t i = 0; i < strlen(cmd_word); i++)
+    if (cmd_word[i] == '>')
     {
+      if (cmd_word[i+1] == ' ')
+        for (size_t m = i; cmd_word[m] != '\0'; m++)
+          cmd_word[m+1] = cmd_word[m+2];
+      if (cmd_word[i-1] == ' ')
+        for (size_t m = i-1; cmd_word[m] != '\0'; m++)
+          cmd_word[m] = cmd_word[m+1];
+      for (i = 0; cmd_word[i] != '>'; i++);
+      outpos = i;
       int k = 0;
-      for (size_t j = i + 1; j < strlen(word); j++)
+      for (size_t j = i+1; j < strlen(cmd_word); j++, k++)
       {
-        if (word[j] == ' ' || word[j] == '\n' || word[j] == '\t')
+        if (cmd_word[j] == ' ' || cmd_word[j] == '\n' || cmd_word[j] == '\t')
           break;
         else
         {
-          output_stream[k] = word[j];
+          output_stream[k] = cmd_word[j];
           output_filled = true;
         }
-        k++;
       }
+      output_stream[k+1] = '\0';
       break;
     }
-  }
+  if (input_filled)
+    cmd_word[inpos] = '\0';
+  else if (output_filled)
+    cmd_word[outpos] = '\0';
+  new_cmd->u.word = (char**) checked_malloc(sizeof(char*));
+  *new_cmd->u.word = cmd_word;
   if (input_filled)
     new_cmd->input = input_stream;
   else
@@ -183,16 +216,16 @@ command_t make_simple_cmd(char *word)
     new_cmd->output = output_stream;
   else
     new_cmd->output = NULL;
-  if(input_stream)
-  {
-    free(input_stream);
-    input_stream = NULL;
-  }
-  if(output_stream)
-  {
-    free(output_stream);
-    output_stream = NULL;
-  }
+//  if(input_stream)
+//  {
+//    free(input_stream);
+//    input_stream = NULL;
+//  }
+//  if(output_stream)
+//  {
+//    free(output_stream);
+//    output_stream = NULL;
+//  }
   return new_cmd;
 }
 
@@ -209,8 +242,9 @@ command_t make_cmd(char *word, enum command_type cmd_type)
   new_cmd->status = -1;
   new_cmd->input = NULL;
   new_cmd->output = NULL;
-  for(int i = 0; i < 3; i++)
-    new_cmd->u.command[i] = NULL;
+  size_t w_it = 0;
+  if (word[0] == '\n' || word[0] == ' ' || word[0] == '\t')
+    for (; !is_word(word[w_it]) && !is_token(word[w_it]); w_it++);
   switch(cmd_type)
   {
     case IF_COMMAND:
@@ -221,22 +255,21 @@ command_t make_cmd(char *word, enum command_type cmd_type)
       bool while_found = false;
       bool until_found = false;
       bool subshell_made = false;
+      bool input_filled = false;
+      bool output_filled = false;
+      char* input_stream = (char*) checked_malloc(strlen(word)+1);
+      char* output_stream = (char*) checked_malloc(strlen(word)+1);
       int sub_count = 0;
-      size_t i = 0;
-      if (word[0] == '\n' || word[0] == ' ' || word[0] == '\t')
-      {
-        for (; !is_word(word[i]) && !is_token(word[i]); i++);
-        i += 2;
-      }
-      else i = 2;
-      for (; i < strlen(word); i++)
+      for(int h = 0; h < 3; h++)
+        new_cmd->u.command[h] = NULL;
+      for (w_it += 2; w_it < strlen(word); w_it++, it++)
       {
         // then/else/fi to delimit commands
-        if (word[i] == 't')
-          if (word[i + 1] == 'h')
-            if (word[i + 2] == 'e')
-              if (word[i + 3] == 'n')
-                if (word[i + 4] == ' ' || word[i + 4] == '\n')
+        if (word[w_it] == 't')
+          if (word[w_it + 1] == 'h')
+            if (word[w_it + 2] == 'e')
+              if (word[w_it + 3] == 'n')
+                if (word[w_it + 4] == ' ' || word[w_it + 4] == '\n')
                 {
                   if (subshell_made)
                     break;
@@ -268,15 +301,15 @@ command_t make_cmd(char *word, enum command_type cmd_type)
                   else
                     new_cmd->u.command[0] = make_cmd(mini_char, SIMPLE_COMMAND);
                   memset(mini_char, '\0', strlen(mini_char));
-                  it = 0;
-                  i += 3;
+                  it = -1;
+                  w_it += 3;
                   continue;
                 }
-        if (word[i] == 'e')
-          if (word[i + 1] == 'l')
-            if (word[i + 2] == 's')
-              if (word[i + 3] == 'e')
-                if (word[i + 4] == ' ' || word[i + 4] == '\n')
+        if (word[w_it] == 'e')
+          if (word[w_it + 1] == 'l')
+            if (word[w_it + 2] == 's')
+              if (word[w_it + 3] == 'e')
+                if (word[w_it + 4] == ' ' || word[w_it + 4] == '\n')
                 {
                   if (subshell_made)
                     break;
@@ -308,155 +341,212 @@ command_t make_cmd(char *word, enum command_type cmd_type)
                   else
                     new_cmd->u.command[1] = make_cmd(mini_char, SIMPLE_COMMAND);
                   memset(mini_char, '\0', strlen(mini_char));
-                  it = 0;
-                  i += 3;
+                  it = -1;
+                  w_it += 3;
                   continue;
                 }
-        if (word[i] == 'f')
-          if (word[i+1] == 'i')
-            if (word[i+2] == ' ' || word[i+2] == '\n' ||
-                word[i+2] == '\0')
+        if (word[w_it] == 'f')
+          if (word[w_it+1] == 'i')
+            if (word[w_it+2] == ' ' || word[w_it+2] == '\n' ||
+                word[w_it+2] == '\0')
             {
+              for (size_t r = w_it+1; r < strlen(word); r++)
+                if (word[r] == '<')
+                {
+                  if (word[r+1] == ' ')
+                    for (size_t m = r; word[m] != '\0'; m++)
+                      word[m+1] = word[m+2];
+                  if (word[r-1] == ' ')
+                    for (size_t m = r-1; word[m] != '\0'; m++)
+                      word[m] = word[m+1];
+                  for (r = 0; word[r] != '<'; r++);
+                  int k = 0;
+                  for (size_t j = r+1; j < strlen(word); j++, k++)
+                  {
+                    if (word[j] == ' ' || word[j] == '\n' ||
+                        word[j] == '\t')
+                      break;
+                    else
+                    {
+                      input_stream[k] = word[j];
+                      input_filled = true;
+                    }
+                  }
+                  input_stream[k+1] = '\0';
+                  break;
+                }
+              for (size_t r = w_it+1; r < strlen(word); r++)
+                if (word[r] == '>')
+                {
+                  if (word[r+1] == ' ')
+                    for (size_t m = r; word[m] != '\0'; m++)
+                      word[m+1] = word[m+2];
+                  if (word[r-1] == ' ')
+                    for (size_t m = r-1; word[m] != '\0'; m++)
+                      word[m] = word[m+1];
+                  for (r = 0; word[r] != '>'; r++);
+                  int k = 0;
+                  for (size_t j = r+1; j < strlen(word); j++, k++)
+                  {
+                    if (word[j] == ' ' || word[j] == '\n' ||
+                        word[j] == '\t')
+                      break;
+                    else
+                    {
+                      output_stream[k] = word[j];
+                      output_filled = true;
+                    }
+                  }
+                  output_stream[k+1] = '\0';
+                  break;
+                }
+              if (input_filled)
+                new_cmd->input = input_stream;
+              else
+                new_cmd->input = NULL;
+              if (output_filled)
+                new_cmd->output = output_stream;
+              else
+                new_cmd->output = NULL;
               if (sequence_found)
               {
-                new_cmd->u.command[2] = make_cmd(mini_char, SEQUENCE_COMMAND);
+                if (new_cmd->u.command[1])
+                  new_cmd->u.command[2] = make_cmd(mini_char, SEQUENCE_COMMAND);
+                else
+                  new_cmd->u.command[1] = make_cmd(mini_char, SEQUENCE_COMMAND);
                 sequence_found = false;
               }
               else if (pipe_found)
               {
-                new_cmd->u.command[2] = make_cmd(mini_char, PIPE_COMMAND);
+                if (new_cmd->u.command[1])
+                  new_cmd->u.command[2] = make_cmd(mini_char, PIPE_COMMAND);
+                else
+                  new_cmd->u.command[1] = make_cmd(mini_char, PIPE_COMMAND);
                 pipe_found = false;
               }
               else if (if_found)
               {
-                new_cmd->u.command[2] = make_cmd(mini_char, IF_COMMAND);
+                if (new_cmd->u.command[1])
+                  new_cmd->u.command[2] = make_cmd(mini_char, IF_COMMAND);
+                else
+                  new_cmd->u.command[1] = make_cmd(mini_char, IF_COMMAND);
                 if_found = false;
               }
               else if (while_found)
               {
-                new_cmd->u.command[2] = make_cmd(mini_char, WHILE_COMMAND);
+                if (new_cmd->u.command[1])
+                  new_cmd->u.command[2] = make_cmd(mini_char, WHILE_COMMAND);
+                else
+                  new_cmd->u.command[1] = make_cmd(mini_char, WHILE_COMMAND);
                 while_found = false;
               }
               else if (until_found)
               {
-                new_cmd->u.command[2] = make_cmd(mini_char, UNTIL_COMMAND);
+                if (new_cmd->u.command[1])
+                  new_cmd->u.command[2] = make_cmd(mini_char, UNTIL_COMMAND);
+                else
+                  new_cmd->u.command[1] = make_cmd(mini_char, UNTIL_COMMAND);
                 until_found = false;
               }
               else
-                new_cmd->u.command[2] = make_cmd(mini_char, SIMPLE_COMMAND);
+              {
+                if (new_cmd->u.command[1])
+                  new_cmd->u.command[2] = make_cmd(mini_char, SIMPLE_COMMAND);
+                else
+                  new_cmd->u.command[1] = make_cmd(mini_char, SIMPLE_COMMAND);
+              }
               break;
             }
-        mini_char[it] = word[i];
+        mini_char[it] = word[w_it];
         // if-while-until check
-        check = i;
-        switch (word[i])
+        check = w_it;
+        switch (word[w_it])
         {
           case 'i':
           {
-            for (int j = 0; j < 3; j++)
-            {
+            for (int j = 0; j < 3; j++, check++)
               mini_check[j] = word[check];
-              check++;
-            }
             if (if_check(mini_check, 0))
-              for(; i < strlen(word) && word[i] != '\0'; i++)
+              for(; w_it < strlen(word) && word[w_it] != '\0'; w_it++, it++)
               {
-                mini_char[it] = word[i];
-                check = i;
-                for (int j = 0; j < 3; j++)
-                {
+                mini_char[it] = word[w_it];
+                check = w_it;
+                for (int j = 0; j < 3; j++, check++)
                   mini_check[j] = word[check];
-                  check++;
-                }
                 if (if_check(mini_check, 0))
                   counter++;
-                if (word[i] == 'f')
-                  if(fi_check(word, i))
+                if (word[w_it] == 'f')
+                  if(fi_check(word, w_it))
                       counter--;
                 if (counter == 0)
                 {
                   for (int k = 0; k < 2; k++)
-                    mini_char[it + k] = word[i + k];
-                  it += 2;
-                  i += 2;
+                    mini_char[it + k] = word[w_it + k];
+                  it += 1;
+                  w_it += 1;
                   if_found = true;
                   break;
                 }
-                it++;
               }
             break;
           }
           case 'w':
           {
-            for (int j = 0; j < 6; j++)
-            {
+            for (int j = 0; j < 6; j++, check++)
               mini_check[j] = word[check];
-              check++;
-            }
             if (while_check(mini_check, 0))
-              for(; i < strlen(word) && word[i] != '\0'; i++)
+              for(; w_it < strlen(word) && word[w_it] != '\0'; w_it++, it++)
               {
-                mini_char[it] = word[i];
-                check = i;
-                for (int j = 0; j < 6; j++)
-                {
+                mini_char[it] = word[w_it];
+                check = w_it;
+                for (int j = 0; j < 6; j++, check++)
                   mini_check[j] = word[check];
-                  check++;
-                }
                 if (while_check(mini_check, 0))
                   counter++;
                 if (until_check(mini_check, 0))
                   counter++;
-                if (word[i] == 'd')
-                  if (done_check(word, i))
+                if (word[w_it] == 'd')
+                  if (done_check(word, w_it))
                     counter--;
                 if (counter == 0)
                 {
                   for (int k = 0; k < 4; k++)
-                    mini_char[it + k] = word[i + k];
-                  it += 4;
-                  i += 4;
+                    mini_char[it + k] = word[w_it + k];
+                  it += 3;
+                  w_it += 3;
                   while_found = true;
                   break;
                 }
-                it++;
               }
             break;
           }  
           case 'u':
           {
-            for (int j = 0; j < 6; j++)
-            {
+            for (int j = 0; j < 6; j++, check++)
               mini_check[j] = word[check];
-              check++;
-            }
             if (until_check(mini_check, 0))
-              for(; i < strlen(word) && word[i] != '\0'; i++)
+              for(; w_it < strlen(word) && word[w_it] != '\0'; w_it++, it++)
               {
-                mini_char[it] = word[i];
-                check = i;
-                for (int j = 0; j < 6; j++)
-                {
+                mini_char[it] = word[w_it];
+                check = w_it;
+                for (int j = 0; j < 6; j++, check++)
                   mini_check[j] = word[check];
-                  check++;
-                }
                 if (until_check(mini_check, 0))
                   counter++;
                 if (while_check(mini_check, 0))
                   counter++;
-                if (word[i] == 'd')
-                  if (done_check(word, i))
+                if (word[w_it] == 'd')
+                  if (done_check(word, w_it))
                     counter--;
                 if (counter == 0)
                 {
                   for (int k = 0; k < 4; k++)
-                    mini_char[it + k] = word[i + k];
-                  it += 4;
-                  i += 4;
+                    mini_char[it + k] = word[w_it + k];
+                  it += 3;
+                  w_it += 3;
                   until_found = true;
                   break;
                 }
-                it++;
               }
             break;
           }
@@ -465,13 +555,9 @@ command_t make_cmd(char *word, enum command_type cmd_type)
         if (mini_char[it] == ';')
         {
           int sc_marker = 0;
-          for(; word[i] != '\n' && word[i] != ' ' &&
-                word[i + 1] != '\0'; it++)
-          {
-            mini_char[it] = word[i];
-            i++;
-            sc_marker++;
-          }
+          for(; word[w_it] != '\n' && word[w_it] != ' ' &&
+                word[w_it + 1] != '\0'; it++, w_it++, sc_marker++)
+            mini_char[it] = word[w_it];
           if (sc_marker > 1)
             sequence_found = true;
         }
@@ -482,16 +568,15 @@ command_t make_cmd(char *word, enum command_type cmd_type)
         if (mini_char[it] == '(')
         {
           int p = 0;
-          for (;; p++)
+          for (;; p++, it++)
           {
-            if (word[i+p] == '(')
+            if (word[w_it+p] == '(')
               sub_count++;
-            if (word[i+p+1] == ')')
+            if (word[w_it+p+1] == ')')
               sub_count--;
             if (sub_count == 0)
               break;
-            subshell_cmd[p] = word[i+p+1];
-            it++;
+            subshell_cmd[p] = word[w_it+p+1];
           }
           for (int u = 0; u < 3; u++)
             if (new_cmd->u.command[u] == NULL)
@@ -501,11 +586,10 @@ command_t make_cmd(char *word, enum command_type cmd_type)
               memset(mini_char, '\0', strlen(mini_char));
               subshell_made = true;
               it = -1;
-              i += p+1;
+              w_it += p+1;
               break;
             }
         }
-        it++;
       }
       break;
     }
@@ -518,21 +602,20 @@ command_t make_cmd(char *word, enum command_type cmd_type)
       bool while_found = false;
       bool until_found = false;
       bool subshell_made = false;
+      bool input_filled = false;
+      bool output_filled = false;
+      char* input_stream = (char*) checked_malloc(strlen(word)+1);
+      char* output_stream = (char*) checked_malloc(strlen(word)+1);      
       int sub_count = 0;
-      size_t i = 0;
-      if (word[0] == '\n' || word[0] == ' ' || word[0] == '\t')
-      {
-        for (; !is_word(word[i]) && !is_token(word[i]); i++);
-        i += 5;
-      }
-      else i = 5;
-      for (; i < strlen(word); i++)
+      for(int h = 0; h < 2; h++)
+        new_cmd->u.command[h] = NULL;
+      for (w_it += 5; w_it < strlen(word); w_it++, it++)
       {
         // do/done to delimit commands
-        if (word[i] == 'd')
-          if (word[i + 1] == 'o')
+        if (word[w_it] == 'd')
+          if (word[w_it+1] == 'o')
           {
-            if (word[i + 2] == ' ' || word[i + 2] == '\n')
+            if (word[w_it+2] == ' ' || word[w_it+2] == '\n')
             {
               if (subshell_made)
                 break;
@@ -564,15 +647,73 @@ command_t make_cmd(char *word, enum command_type cmd_type)
               else
                 new_cmd->u.command[0] = make_cmd(mini_char, SIMPLE_COMMAND);
               memset(mini_char, '\0', strlen(mini_char));
-              it = 0;
-              i += 2;
+              it = -1;
+              w_it += 2;
               continue;
             }
-            if (word[i + 2] == 'n')
-              if (word[i + 3] == 'e')
-                if (word[i + 4] == ' ' || word[i + 4] == '\n' ||
-                    word[i + 4] == '\0')
+            if (word[w_it+2] == 'n')
+              if (word[w_it+3] == 'e')
+                if (word[w_it+4] == ' ' || word[w_it+4] == '\n' ||
+                    word[w_it+4] == '\0')
                 {
+                  for (size_t r = w_it+1; r < strlen(word); r++)
+                    if (word[r] == '<')
+                    {
+                      if (word[r+1] == ' ')
+                        for (size_t m = r; word[m] != '\0'; m++)
+                          word[m+1] = word[m+2];
+                      if (word[r-1] == ' ')
+                        for (size_t m = r-1; word[m] != '\0'; m++)
+                          word[m] = word[m+1];
+                      for (r = 0; word[r] != '<'; r++);
+                      int k = 0;
+                      for (size_t j = r+1; j < strlen(word); j++, k++)
+                      {
+                        if (word[j] == ' ' || word[j] == '\t' ||
+                            word[j] == '>' || word[j] == '\n')
+                          break;
+                        else
+                        {
+                          input_stream[k] = word[j];
+                          input_filled = true;
+                        }
+                      }
+                      input_stream[k+1] = '\0';
+                      break;
+                    }
+                  for (size_t r = w_it+1; r < strlen(word); r++)
+                    if (word[r] == '>')
+                    {
+                      if (word[r+1] == ' ')
+                        for (size_t m = r; word[m] != '\0'; m++)
+                          word[m+1] = word[m+2];
+                      if (word[r-1] == ' ')
+                        for (size_t m = r-1; word[m] != '\0'; m++)
+                          word[m] = word[m+1];
+                      for (r = 0; word[r] != '>'; r++);
+                      int k = 0;
+                      for (size_t j = r+1; j < strlen(word); j++, k++)
+                      {
+                        if (word[j] == ' ' || word[j] == '\n' ||
+                            word[j] == '\t')
+                          break;
+                        else
+                        {
+                          output_stream[k] = word[j];
+                          output_filled = true;
+                        }
+                      }
+                      output_stream[k+1] = '\0';
+                      break;
+                    }
+                  if (input_filled)
+                    new_cmd->input = input_stream;
+                  else
+                    new_cmd->input = NULL;
+                  if (output_filled)
+                    new_cmd->output = output_stream;
+                  else
+                    new_cmd->output = NULL;
                   if (subshell_made)
                     break;
                   if (sequence_found)
@@ -605,117 +746,104 @@ command_t make_cmd(char *word, enum command_type cmd_type)
                   break;
                 }
           }
-        mini_char[it] = word[i];
+        mini_char[it] = word[w_it];
         // if-while-until check
-        check = i;
-        switch (word[i])
+        check = w_it;
+        switch (word[w_it])
         {
           case 'i':
           {
-            for (int j = 0; j < 3; j++)
-            {
+            for (int j = 0; j < 3; j++, check++)
               mini_check[j] = word[check];
-              check++;
-            }
             if (if_check(mini_check, 0))
-              for(; i < strlen(word) && word[i] != '\0'; i++)
+              for(; w_it < strlen(word) && word[w_it] != '\0'; w_it++, it++)
               {
-                mini_char[it] = word[i];
-                check = i;
-                for (int j = 0; j < 3; j++)
-                {
+                mini_char[it] = word[w_it];
+                check = w_it;
+                for (int j = 0; j < 3; j++, check++)
                   mini_check[j] = word[check];
-                  check++;
-                }
                 if (if_check(mini_check, 0))
                   counter++;
-                if (word[i] == 'f')
-                  if(fi_check(word, i))
+                if (word[w_it] == 'f')
+                  if(fi_check(word, w_it))
                       counter--;
                 if (counter == 0)
                 {
                   for (int k = 0; k < 2; k++)
-                    mini_char[it + k] = word[i + k];
-                  it += 2;
-                  i += 2;
+                    mini_char[it + k] = word[w_it + k];
+                  it += 1;
+                  w_it += 1;
                   if_found = true;
                   break;
                 }
-                it++;
               }
             break;
           }
           case 'w':
           {
-            for (int j = 0; j < 6; j++)
-            {
+            for (int j = 0; j < 6; j++, check++)
               mini_check[j] = word[check];
-              check++;
-            }
             if (while_check(mini_check, 0))
-              for(; i < strlen(word) && word[i] != '\0'; i++)
+              for(; w_it < strlen(word) && word[w_it] != '\0'; w_it++, it++)
               {
-                mini_char[it] = word[i];
-                check = i;
-                for (int j = 0; j < 6; j++)
-                {
+                mini_char[it] = word[w_it];
+                check = w_it;
+                for (int j = 0; j < 6; j++, check++)
                   mini_check[j] = word[check];
-                  check++;
-                }
                 if (while_check(mini_check, 0))
                   counter++;
                 if (until_check(mini_check, 0))
                   counter++;
-                if (word[i] == 'd')
-                  if (done_check(word, i))
+                if (word[w_it] == 'd')
+                  if (done_check(word, w_it))
                     counter--;
                 if (counter == 0)
                 {
                   for (int k = 0; k < 4; k++)
-                    mini_char[it + k] = word[i + k];
-                  it += 4;
-                  i += 4;
+                    mini_char[it + k] = word[w_it + k];
+                  it += 3;
+                  w_it += 3;
                   while_found = true;
                   break;
                 }
-                it++;
               }
             break;
           }  
           case 'u':
           {
-            for (int j = 0; j < 6; j++)
-            {
+            for (int j = 0; j < 6; j++, check++)
               mini_check[j] = word[check];
-              check++;
-            }
             if (until_check(mini_check, 0))
-              for(; i < strlen(word) && word[i] != '\0'; i++)
+              for(; w_it < strlen(word) && word[w_it] != '\0'; w_it++, it++)
               {
-                mini_char[it] = word[i];
-                check = i;
-                for (int j = 0; j < 6; j++)
-                {
+                mini_char[it] = word[w_it];
+                check = w_it;
+                for (int j = 0; j < 6; j++, check++)
                   mini_check[j] = word[check];
-                  check++;
-                }
                 if (until_check(mini_check, 0))
                   counter++;
                 if (while_check(mini_check, 0))
                   counter++;
-                if (word[i] == 'd')
-                  if (done_check(word, i))
+                if (word[w_it] == 'd')
+                  if (done_check(word, w_it))
                     counter--;
                 if (counter == 0)
                 {
                   for (int k = 0; k < 4; k++)
-                    mini_char[it + k] = word[i + k];
-                  it += 4;
-                  i += 4;
+                    mini_char[it+k] = word[w_it+k];
+                  it += 3;
+                  w_it += 3;
                   until_found = true;
+                  for (size_t q = w_it; q < strlen(word); q++)
+                  {
+                    if (word[q] == 'd')
+                      if (done_check(word, q))
+                        break;
+                    if (word[q] != '\n' || word[q] != '\t' || word[q] != ' ')
+                      sequence_found = true;
+                  }
                   break;
                 }
-                it++;
               }
             break;
           }
@@ -724,13 +852,9 @@ command_t make_cmd(char *word, enum command_type cmd_type)
         if (mini_char[it] == ';')
         {
           int sc_marker = 0;
-          for(; word[i] != '\n' && word[i] != ' ' &&
-                word[i + 1] != '\0'; it++)
-          {
-            mini_char[it] = word[i];
-            i++;
-            sc_marker++;
-          }
+          for(; word[w_it] != '\n' && word[w_it] != ' ' &&
+                word[w_it+1] != '\0'; it++, w_it++, sc_marker++)
+            mini_char[it] = word[w_it];
           if (sc_marker > 1)
             sequence_found = true;
         }
@@ -741,16 +865,15 @@ command_t make_cmd(char *word, enum command_type cmd_type)
         if (mini_char[it] == '(')
         {
           int p = 0;
-          for (;; p++)
+          for (;; p++, it++)
           {
-            if (word[i+p] == '(')
+            if (word[w_it+p] == '(')
               sub_count++;
-            if (word[i+p+1] == ')')
+            if (word[w_it+p+1] == ')')
               sub_count--;
             if (sub_count == 0)
               break;
-            subshell_cmd[p] = word[i+p+1];
-            it++;
+            subshell_cmd[p] = word[w_it+p+1];
           }
           for (int u = 0; u < 3; u++)
             if (new_cmd->u.command[u] == NULL)
@@ -760,11 +883,10 @@ command_t make_cmd(char *word, enum command_type cmd_type)
               memset(mini_char, '\0', strlen(mini_char));
               subshell_made = true;
               it = -1;
-              i += p+1;
+              w_it += p+1;
               break;
             }
         }
-        it++;
       }
       break;
     }
@@ -775,29 +897,29 @@ command_t make_cmd(char *word, enum command_type cmd_type)
       int sub_count = 0;
       char* left_cmd;
       char* right_cmd = (char*) checked_malloc(strlen(mini_char) + 1);
-      size_t i = 0;
-      if (word[0] == '\n' || word[0] == ' ' || word[0] == '\t')
-        for (; !is_word(word[i]) && !is_token(word[i]); i++);
-      for (; i < strlen(word); i++)
+      for(int h = 0; h < 2; h++)
+        new_cmd->u.command[h] = NULL;
+      for (; w_it < strlen(word); w_it++, it++)
       {
-        mini_char[it] = word[i];
+        mini_char[it] = word[w_it];
         if (mini_char[it] == '\n' || word[it + 1] == '\0')
         {
           for (int j = it; j > -1; j--)
-          {
             if (mini_char[j] == '|')
             {
               pipes--;
               int x = j;
+              for(; !is_word(mini_char[x-1]); x--);
               left_cmd = (char*) checked_malloc((size_t) x);
-              for(int k = 0; mini_char[j+1] != '\n' && mini_char[j+1] != '\0'; k++)
-              {
+              for(int k = 0; mini_char[j+1] != '\n' && mini_char[j+1] != '\0';
+                  k++, j++)
                 right_cmd[k] = mini_char[j+1];
-                j++;
-              }
               new_cmd->u.command[1] = make_cmd(right_cmd, SIMPLE_COMMAND);
               for(int z = 0; z < x; z++)
+              {
                 left_cmd[z] = mini_char[z];
+                left_cmd[z+1] = '\0';
+              }
               if (pipes > 0)
                 new_cmd->u.command[0] = make_cmd(left_cmd, PIPE_COMMAND);
               else if (sequence_found)
@@ -806,40 +928,33 @@ command_t make_cmd(char *word, enum command_type cmd_type)
                 new_cmd->u.command[0] = make_cmd(left_cmd, SIMPLE_COMMAND);
               break;
             }
-          }
         }
         // semi-colon behavior
         if (mini_char[it] == ';')
         {
           int sc_marker = 0;
-          for(; word[i] != '\n' && word[i] != ' ' &&
-                word[i+1] != '\0'; it++)
-          {
-            mini_char[it] = word[i];
-            i++;
-            sc_marker++;
-          }
+          for(; word[w_it] != '\n' && word[w_it] != ' ' &&
+                word[w_it+1] != '\0'; it++, w_it++, sc_marker++)
+            mini_char[it] = word[w_it];
           if (sc_marker > 1)
             sequence_found = true;
           else
             for (int j = it; j > -1; j--)
-            {
               if (mini_char[j] == '|')
               {
                 pipes--;
                 int x = j;
+                for(; !is_word(mini_char[x-1]); x--);
                 left_cmd = (char*) checked_malloc((size_t) x);
                 for(int k = 0; mini_char[j+1] != ';' && mini_char[j+1] != '\n' &&
-                               mini_char[j+1] != '\0'; k++)
-                {
+                               mini_char[j+1] != '\0'; k++, j++)
                   right_cmd[k] = mini_char[j+1];
-                  j++;
-                }
                 new_cmd->u.command[1] = make_cmd(right_cmd, SIMPLE_COMMAND);
-                int z = 0;
-                for(; z < x; z++)
+                for(int z = 0; z < x; z++)
+                {
                   left_cmd[z] = mini_char[z];
-                left_cmd[z] = ';';
+                  left_cmd[z+1] = '\0';
+                }
                 if (pipes > 0)
                   new_cmd->u.command[0] = make_cmd(left_cmd, PIPE_COMMAND);
                 else if (sequence_found)
@@ -848,7 +963,6 @@ command_t make_cmd(char *word, enum command_type cmd_type)
                   new_cmd->u.command[0] = make_cmd(left_cmd, SIMPLE_COMMAND);
                 break;
               }
-            }
         }
         // pipe behavior
         if (mini_char[it] == '|')
@@ -857,7 +971,7 @@ command_t make_cmd(char *word, enum command_type cmd_type)
         if (mini_char[it] == '(')
         {
           int p = 0;
-          for (;; p++)
+          for (;; p++, it++)
           {
             if (mini_char[it] == '(')
               sub_count++;
@@ -866,7 +980,6 @@ command_t make_cmd(char *word, enum command_type cmd_type)
             if (sub_count == 0)
               break;
             subshell_cmd[p] = mini_char[it + 1];
-            it++;
           }
           for (int u = 0; u < 3; u++)
             if (new_cmd->u.command[u] == NULL)
@@ -875,11 +988,10 @@ command_t make_cmd(char *word, enum command_type cmd_type)
               memset(subshell_cmd, '\0', strlen(subshell_cmd));
               memset(mini_char, '\0', strlen(mini_char));
               it = -1;
-              i += p+1;
+              w_it += p+1;
               break;
             }
         }
-        it++;
       }
       /*if(left_cmd)
       {
@@ -895,83 +1007,193 @@ command_t make_cmd(char *word, enum command_type cmd_type)
     }
     case SEQUENCE_COMMAND:
     {
+      bool if_found = false;
+      bool while_found = false;
+      bool until_found = false;      
       bool pipe_found = false;
       int seqs = 0;
       int sub_count = 0;
+      size_t cmd_end;
       char* left_cmd;
       char* right_cmd = (char*) checked_malloc(strlen(mini_char) + 1);
-      size_t i = 0;
-      if (word[0] == '\n' || word[0] == ' ' || word[0] == '\t')
-        for (; !is_word(word[i]) && !is_token(word[i]); i++);
-      for (; i < strlen(word); i++)
+      for(int h = 0; h < 2; h++)
+        new_cmd->u.command[h] = NULL;
+      for (size_t o = strlen(word); o != 0; o--)
+        if (is_word(word[o]) || is_token(word[o]))
+        {
+          cmd_end = o;
+          break;
+        }
+      for (; w_it < cmd_end + 1; w_it++, it++)
       {
-        mini_char[it] = word[i];
-        if (mini_char[it] == '\n' || word[it + 1] == '\0')
+        mini_char[it] = word[w_it];
+        check = w_it;
+        if (w_it == cmd_end)
         {
           for (int j = it; j > -1; j--)
-          {
-            if (mini_char[j] == ';')
+            if (mini_char[j] == ';' || mini_char[j] == '\n')
             {
               seqs--;
               int x = j;
+              for(; !is_word(mini_char[x-1]); x--);
               left_cmd = (char*) checked_malloc((size_t) x + 1);
-              for(int k = 0; mini_char[j+1] != '\n' && mini_char[j+1] != '\0'; k++)
-              {
+              for(int k = 0; mini_char[j+1] != '\n' && mini_char[j+1] != '\0';
+                  k++, j++)
                 right_cmd[k] = mini_char[j+1];
-                j++;
-              }
               new_cmd->u.command[1] = make_cmd(right_cmd, SIMPLE_COMMAND);
               for(int z = 0; z < x; z++)
+              {
                 left_cmd[z] = mini_char[z];
+                left_cmd[z+1] = '\0';
+              }
               if (seqs > 0)
                 new_cmd->u.command[0] = make_cmd(left_cmd, SEQUENCE_COMMAND);
               else if (pipe_found)
                 new_cmd->u.command[0] = make_cmd(left_cmd, PIPE_COMMAND);
+              else if (if_found)
+                new_cmd->u.command[0] = make_cmd(left_cmd, IF_COMMAND);
+              else if (while_found)
+                new_cmd->u.command[0] = make_cmd(left_cmd, WHILE_COMMAND);
+              else if (until_found)
+                new_cmd->u.command[0] = make_cmd(left_cmd, UNTIL_COMMAND);
               else
                 new_cmd->u.command[0] = make_cmd(left_cmd, SIMPLE_COMMAND);
               break;
             }
+        }
+        switch (word[w_it])
+        {
+          case 'i':
+          {
+            for (int j = 0; j < 3; j++, check++)
+              mini_check[j] = word[check];
+            if (if_check(mini_check, 0))
+              for(; w_it < strlen(word) && word[w_it] != '\0'; w_it++, it++)
+              {
+                mini_char[it] = word[w_it];
+                check = w_it;
+                for (int j = 0; j < 3; j++, check++)
+                  mini_check[j] = word[check];
+                if (if_check(mini_check, 0))
+                  counter++;
+                if (word[w_it] == 'f')
+                  if(fi_check(word, w_it))
+                      counter--;
+                if (counter == 0)
+                {
+                  for (int k = 0; k < 2; k++)
+                    mini_char[it + k] = word[w_it + k];
+                  it += 1;
+                  w_it += 1;
+                  if_found = true;
+                  break;
+                }
+              }
+            break;
+          }
+          case 'w':
+          {
+            for (int j = 0; j < 6; j++, check++)
+              mini_check[j] = word[check];
+            if (while_check(mini_check, 0))
+              for(; w_it < strlen(word) && word[w_it] != '\0'; w_it++, it++)
+              {
+                mini_char[it] = word[w_it];
+                check = w_it;
+                for (int j = 0; j < 6; j++, check++)
+                  mini_check[j] = word[check];
+                if (while_check(mini_check, 0))
+                  counter++;
+                if (until_check(mini_check, 0))
+                  counter++;
+                if (word[w_it] == 'd')
+                  if (done_check(word, w_it))
+                    counter--;
+                if (counter == 0)
+                {
+                  for (int k = 0; k < 4; k++)
+                    mini_char[it + k] = word[w_it + k];
+                  it += 3;
+                  w_it += 3;
+                  while_found = true;
+                  break;
+                }
+              }
+            break;
+          }  
+          case 'u':
+          {
+            for (int j = 0; j < 6; j++, check++)
+              mini_check[j] = word[check];
+            if (until_check(mini_check, 0))
+              for(; w_it < strlen(word) && word[w_it] != '\0'; w_it++, it++)
+              {
+                mini_char[it] = word[w_it];
+                check = w_it;
+                for (int j = 0; j < 6; j++, check++)
+                  mini_check[j] = word[check];
+                if (until_check(mini_check, 0))
+                  counter++;
+                if (while_check(mini_check, 0))
+                  counter++;
+                if (word[w_it] == 'd')
+                  if (done_check(word, w_it))
+                    counter--;
+                if (counter == 0)
+                {
+                  for (int k = 0; k < 4; k++)
+                    mini_char[it + k] = word[w_it + k];
+                  it += 3;
+                  w_it += 3;
+                  until_found = true;
+                  break;
+                }
+              }
+            break;
           }
         }
         // semi-colon behavior
         if (mini_char[it] == ';')
         {
           int sc_marker = 0;
-          for(; word[i] != '\n' && word[i] != ' ' &&
-                word[i+1] != '\0'; it++)
+          for(; word[w_it+1] != '\0' ||
+               (word[w_it+1] != ';' && word[w_it+2] != '\0'); it++, w_it++)
           {
-            mini_char[it] = word[i];
-            i++;
-            if (word[i] == ';')
+            mini_char[it] = word[w_it];
+            if (word[w_it] == ';')
               sc_marker++;
           }
           seqs = sc_marker;
           for (int j = it; j > -1; j--)
-          {
-            if (mini_char[j] == ';')
+            if (mini_char[j] == ';' || mini_char[j] == '\n')
             {
               seqs--;
               int x = j;
+              for(; !is_word(mini_char[x-1]); x--);
               left_cmd = (char*) checked_malloc((size_t) x + 1);
-              for(int k = 0; mini_char[j+1] != '\n' && mini_char[j+1] != '\0'; k++)
-              {
+              for(int k = 0; mini_char[j+1] != ';' && mini_char[j+1] != '\n' &&
+                             mini_char[j+1] != '\0'; k++, j++)
                 right_cmd[k] = mini_char[j+1];
-                j++;
-              }
               new_cmd->u.command[1] = make_cmd(right_cmd, SIMPLE_COMMAND);
-              int z = 0;
-              for(; z < x; z++)
+              for(int z = 0; z < x + 1; z++)
+              {
                 left_cmd[z] = mini_char[z];
-              left_cmd[z] = ';';
+                left_cmd[z+1] = '\0';
+              }
               if (seqs > 0)
                 new_cmd->u.command[0] = make_cmd(left_cmd, SEQUENCE_COMMAND);
               else if (pipe_found)
                 new_cmd->u.command[0] = make_cmd(left_cmd, PIPE_COMMAND);
+              else if (if_found)
+                new_cmd->u.command[0] = make_cmd(left_cmd, IF_COMMAND);
+              else if (while_found)
+                new_cmd->u.command[0] = make_cmd(left_cmd, WHILE_COMMAND);
+              else if (until_found)
+                new_cmd->u.command[0] = make_cmd(left_cmd, UNTIL_COMMAND);
               else
                 new_cmd->u.command[0] = make_cmd(left_cmd, SIMPLE_COMMAND);
               break;
             }
-          }
         }
         // pipe behavior
         if (mini_char[it] == '|')
@@ -980,7 +1202,7 @@ command_t make_cmd(char *word, enum command_type cmd_type)
         if (mini_char[it] == '(')
         {
           int p = 0;
-          for (;; p++)
+          for (;; p++, it++)
           {
             if (mini_char[it] == '(')
               sub_count++;
@@ -989,7 +1211,6 @@ command_t make_cmd(char *word, enum command_type cmd_type)
             if (sub_count == 0)
               break;
             subshell_cmd[p] = mini_char[it + 1];
-            it++;
           }
           for (int u = 0; u < 3; u++)
             if (new_cmd->u.command[u] == NULL)
@@ -998,11 +1219,10 @@ command_t make_cmd(char *word, enum command_type cmd_type)
               memset(subshell_cmd, '\0', strlen(subshell_cmd));
               memset(mini_char, '\0', strlen(mini_char));
               it = -1;
-              i += p+1;
+              w_it += p+1;
               break;
             }
         }
-        it++;
       }
       /*if(left_cmd)
       {
@@ -1021,12 +1241,11 @@ command_t make_cmd(char *word, enum command_type cmd_type)
       bool sequence_found = false;
       bool pipe_found = false;
       int sub_count = 0;
-      size_t i = 0;
-      if (word[0] == '\n' || word[0] == ' ' || word[0] == '\t')
-        for (; !is_word(word[i]) && !is_token(word[i]); i++);
-      for (; i < strlen(word); i++)
+      for(int h = 0; h < 2; h++)
+        new_cmd->u.command[h] = NULL;
+      for (; w_it < strlen(word); w_it++, it++)
       {
-        mini_char[it] = word[i];
+        mini_char[it] = word[w_it];
         if (mini_char[it] == '\n' || word[it + 1] == '\0')
         {
           if (pipe_found)
@@ -1041,13 +1260,9 @@ command_t make_cmd(char *word, enum command_type cmd_type)
         if (mini_char[it] == ';')
         {
           int sc_marker = 0;
-          for(; word[i] != '\n' && word[i] != ' ' &&
-                word[i + 1] != '\0'; it++)
-          {
-            mini_char[it] = word[i];
-            i++;
-            sc_marker++;
-          }
+          for(; word[w_it] != '\n' && word[w_it] != ' ' &&
+                word[w_it + 1] != '\0'; it++, w_it++, sc_marker++)
+            mini_char[it] = word[w_it];
           if (sc_marker > 1)
             sequence_found = true;
           else
@@ -1066,7 +1281,7 @@ command_t make_cmd(char *word, enum command_type cmd_type)
         if (mini_char[it] == '(')
         {
           int p = 0;
-          for (;; p++)
+          for (;; p++, it++)
           {
             if (mini_char[it] == '(')
               sub_count++;
@@ -1075,7 +1290,6 @@ command_t make_cmd(char *word, enum command_type cmd_type)
             if (sub_count == 0)
               break;
             subshell_cmd[p] = mini_char[it + 1];
-            it++;
           }
           for (int u = 0; u < 3; u++)
             if (new_cmd->u.command[u] == NULL)
@@ -1084,11 +1298,10 @@ command_t make_cmd(char *word, enum command_type cmd_type)
               memset(subshell_cmd, '\0', strlen(subshell_cmd));
               memset(mini_char, '\0', strlen(mini_char));
               it = -1;
-              i += p+1;
+              w_it += p+1;
               break;
             }
         }
-        it++;
       }
       break;
     }
@@ -1098,24 +1311,26 @@ command_t make_cmd(char *word, enum command_type cmd_type)
       break;
     }
   }
-  if(mini_char)
-  {
-    free(mini_char);
-    mini_char = NULL;
-  }
-  if(subshell_cmd)
-  {
-    free(subshell_cmd);
-    subshell_cmd = NULL;
-  }
+//  if(mini_char)
+//  {
+//    free(mini_char);
+//    mini_char = NULL;
+//  }
+//  if(subshell_cmd)
+//  {
+//    free(subshell_cmd);
+//    subshell_cmd = NULL;
+//  }
   return new_cmd;
 }
 
 void insert_cmd(char *word, enum command_type cmd_type, command_stream_t cmd_stream)
 {
+  char* cmd_prep = (char*) checked_malloc(strlen(word) + 1);
   node_t new_node = (node_t) checked_malloc(sizeof(struct node));
   command_t new_cmd = (command_t) checked_malloc(sizeof(struct command));
-  new_cmd = make_cmd(word, cmd_type);
+  memcpy((void*) cmd_prep, (void*) word, strlen(word));
+  new_cmd = make_cmd(cmd_prep, cmd_type);
   new_node->m_command = new_cmd; 
   if (cmd_stream->m_head == NULL)
   {
@@ -1239,7 +1454,7 @@ make_command_stream (int (*get_next_byte) (void *),
       line++;
     if(buffer[i] == 'f')
       if(buffer[i+1] != '\0' && buffer[i+1] == 'i')
-        if(buffer[i+2] != '\0' && (buffer[i+2] == '\n' || buffer[i+2] == ' '))
+        if(buffer[i+2] == '\0' || buffer[i+2] == '\n' || buffer[i+2] == ' ')
           fi_count++;
     if(fi_count > if_count)
       print_err(line);
@@ -1624,7 +1839,7 @@ make_command_stream (int (*get_next_byte) (void *),
     }
   }
   char_stream = (char*) checked_malloc(strlen(buffer) + 1);
-  for(size_t i = 0; i < strlen(buffer); i++)
+  for(size_t i = 0; i < strlen(buffer); i++, it++)
   {
     char_stream[it] = buffer[i];
     // if-while-until check
@@ -1637,15 +1852,12 @@ make_command_stream (int (*get_next_byte) (void *),
         {
           if (if_check(buffer, i))
           {
-            for(; i < strlen(buffer) && buffer[i] != '\0'; i++)
+            for(; i < strlen(buffer) && buffer[i] != '\0'; i++, it++)
             {
               char_stream[it] = buffer[i];
               check = i;
-              for (int j = 0; j < 3; j++)
-              {
+              for (int j = 0; j < 3; j++, check++)
                 check_stream[j] = buffer[check];
-                check++;
-              }
               if (if_check(check_stream, 0))
                 counter++;
               if (buffer[i] == 'f')
@@ -1662,29 +1874,22 @@ make_command_stream (int (*get_next_byte) (void *),
                 it = -1;
                 break;
               }
-              it++;
             }
           }
           break;
         }
         case 'w':
         {
-          for (int j = 0; j < 6; j++)
-          {
+          for (int j = 0; j < 6; j++, check++)
             check_stream[j] = buffer[check];
-            check++;
-          }
           if (while_check(check_stream, 0))
           {
             for(; i < strlen(buffer) && buffer[i] != '\0'; i++)
             {
               char_stream[it] = buffer[i];
               check = i;
-              for (int j = 0; j < 5; j++)
-              {
+              for (int j = 0; j < 5; j++, check++)
                 check_stream[j] = buffer[check];
-                check++;
-              }
               if (while_check(check_stream, 0))
                 counter++;
               if (until_check(check_stream, 0))
@@ -1710,22 +1915,16 @@ make_command_stream (int (*get_next_byte) (void *),
         }
         case 'u':
         {
-          for (int j = 0; j < 6; j++)
-          {
+          for (int j = 0; j < 6; j++, check++)
             check_stream[j] = buffer[check];
-            check++;
-          }
           if (until_check(check_stream, 0))
           {
             for(; i < strlen(buffer) && buffer[i] != '\0'; i++)
             {
               char_stream[it] = buffer[i];
               check = i;
-              for (int j = 0; j < 5; j++)
-              {
+              for (int j = 0; j < 5; j++, check++)
                 check_stream[j] = buffer[check];
-                check++;
-              }
               if (until_check(check_stream, 0))
                 counter++;
               if (while_check(check_stream, 0))
@@ -1759,19 +1958,28 @@ make_command_stream (int (*get_next_byte) (void *),
     if (char_stream[it] == '\n')
       if (it > 0 && char_stream[it - 1] == '\n')
       {
-        insert_cmd(char_stream, SIMPLE_COMMAND, cmd_stream);
-        memset(char_stream, '\0', strlen(char_stream));
-        it = -1;
+        bool word_present = false;
+        for (size_t n = 0; n < strlen(char_stream); n++)
+        {
+          if (char_stream[n] != '\n' && char_stream[n] != ' ' && 
+              char_stream[n] != '\t')
+            word_present = true;
+        }
+        if (word_present)
+        {
+          char_stream[it-1] = '\0'; 
+          insert_cmd(char_stream, SIMPLE_COMMAND, cmd_stream);
+          memset(char_stream, '\0', strlen(char_stream));
+          it = -1;
+        }
+        else continue;
       }
     // semi-colon behavior
     if (char_stream[it] == ';')
     {
-      for(; char_stream[it] != '\n' && char_stream[it] != ' ' && char_stream[it] != '\0'; it++)
-      {
+      for(; char_stream[it] != '\n' && char_stream[it] != ' ' &&
+            char_stream[it] != '\0'; it++, i++, sc_marker++)
         char_stream[it] = buffer[i];
-        i++;
-        sc_marker++;
-      }
       if (sc_marker > 1)
       {
         insert_cmd(char_stream, SEQUENCE_COMMAND, cmd_stream);
@@ -1789,12 +1997,9 @@ make_command_stream (int (*get_next_byte) (void *),
     // pipe behavior
     if (char_stream[it] == '|')
     {
-      for(; (char_stream[it] != '\n' && char_stream[it] != ';') ||
-             buffer[i+1] != '\0'; it++)
-      {
+      for(; (char_stream[it] != '\n' && char_stream[it] != ';') &&
+             buffer[i+1] != '\0'; i++, it++)
         char_stream[it] = buffer[i];
-        i++;
-      }
       insert_cmd(char_stream, PIPE_COMMAND, cmd_stream);
       memset(char_stream, '\0', strlen(char_stream));
       it = -1;
@@ -1820,18 +2025,25 @@ make_command_stream (int (*get_next_byte) (void *),
       memset(char_stream, '\0', strlen(char_stream));
       it = -1;
     }
-    it++;
+    if (buffer[i+1] == '\0')
+    {
+      if (char_stream[0] == '\0')
+        break;
+      insert_cmd(char_stream, SIMPLE_COMMAND, cmd_stream);
+      memset(char_stream, '\0', strlen(char_stream));
+      it = -1;
+    }
   }
-  if(char_stream)
-  {
-    free(char_stream);
-    char_stream = NULL;
-  }
-  if(buffer)
-  {
-    free(buffer);
-    buffer = NULL;
-  }
+//  if(char_stream)
+//  {
+//    free(char_stream);
+//    char_stream = NULL;
+//  }
+//  if(buffer)
+//  {
+//    free(buffer);
+//    buffer = NULL;
+//  }
   return cmd_stream;
 }
 
@@ -1842,24 +2054,23 @@ read_command_stream (command_stream_t s)
     return NULL;
   if (s->m_head)
   {
-    node_t cmd_node = (node_t) checked_malloc(sizeof(struct node));
-    cmd_node = s->m_head;
+//    node_t cmd_node = (node_t) checked_malloc(sizeof(struct node));
+//    cmd_node = s->m_head;
     command_t cmd = (command_t) checked_malloc(sizeof(struct command));
     cmd = s->m_head->m_command;
     s->m_head = s->m_head->m_next;
-    if (cmd_node->m_command)
-    //free_cmd(cmd_node->m_command);
-    //if(cmd_node)
-    //{
-    //  free(cmd_node);
-    //  cmd_node = NULL;
-    //}
+//    if (cmd_node->m_command)
+//    {
+//      free_cmd(cmd_node->m_command);
+//      cmd_node->m_command = NULL;
+//    }
+//    if(cmd_node)
+//    {
+//      free(cmd_node);
+//      cmd_node = NULL;
+//    }
     cmd_read++;
-    printf("command received\n");
-    printf("commands read: %d\n", cmd_read);
-    //printf("the command is %s\n", cmd->u.word[0]);
     return cmd;
-    //return NULL;
   }
   fprintf(stderr, "Could not read command");
   exit(-1);
