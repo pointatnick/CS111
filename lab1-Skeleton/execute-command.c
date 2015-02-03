@@ -1,20 +1,3 @@
-// UCLA CS 111 Lab 1 command execution
-
-// Copyright 2012-2014 Paul Eggert.
-
-// This program is free software: you can redistribute it and/or modify
-// it under the terms of the GNU General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or
-// (at your option) any later version.
-
-// This program is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-// GNU General Public License for more details.
-
-// You should have received a copy of the GNU General Public License
-// along with this program.  If not, see <http://www.gnu.org/licenses/>.
-
 #include "command.h"
 #include "command-internals.h"
 #include <stdio.h>
@@ -24,7 +7,7 @@
    static function definitions, etc.  */
 
 int
-prepare_profiling (char const *name)
+prepare_profiling(char const *name)
 {
   /* FIXME: Replace this with your implementation.  You may need to
      add auxiliary functions and otherwise modify the source code.
@@ -33,14 +16,127 @@ prepare_profiling (char const *name)
 }
 
 int
-command_status (command_t c)
+command_status(command_t c)
 {
   return c->status;
 }
 
 void
-execute_command (command_t c, int profiling)
+exec_simple_cmd(command_t cmd)
 {
-  if (profiling < 0)
-  	exit(-1);
+	int state;
+	pid_t pid = fork();
+	if (pid < 0)
+		//error
+	else if (pid == 0)
+	{
+		//redirects
+		if (strcmp(c->u.word[0], "exec") == 0)
+			c->u.word++;
+		execvp(c->u.word[0], c->u.word);
+		//error
+	}
+	else
+	{
+		waitpid(pid, &state, 0);
+		c->status = WEXITSTATUS(state);
+	}
+}
+
+void
+execute_command(command_t c, int profiling)
+{
+  switch(c->status)
+  {
+  	case IF_COMMAND:
+  		execute_command(c->u.command[0]);
+  		execute_command(c->u.command[1]);
+  		if (c->u.command[2])
+  		{
+  			execute_command(c->u.command[2]);
+  			c->status = command_status(c->u.command[2]);
+  		}
+  		else
+  			c->status = command_status(c->u.command[1]);
+  		break;
+  	case WHILE_COMMAND:
+  	case UNTIL_COMMAND:
+	  	execute_command(c->u.command[0]);
+  		execute_command(c->u.command[1]);
+  		break;
+  	case PIPE_COMMAND:
+  		pid_t lpid;
+  		pid_t rpid;
+  		int fd[2];
+  		int state;
+  		lpid = fork();
+  		if (lpid < 0)
+  			//error
+  		else if (lpid == 0)
+  		{
+  			if (dup2(fd[0], 0) < 0)
+  				//error
+  			close(fd[1]);
+  			execute_command(c->u.command[1]);
+  			_exit(c->u.command[1]->status);
+  		}
+  		else
+  		{
+  			rpid = fork();
+  			if (rpid < 0)
+  				//error
+  			else if (rpid == 0)
+  			{
+  				if (dup2(fd[1], 1) < 0)
+  					//error
+  				close(fd[0]);
+  				execute_command(c->u.command[0]);
+  				_exit(c->u.command[0]->status);
+  			}
+  			else
+  			{
+  				//returnedPid = waitpid(-1, &state, 0);
+  				close(fd[0]);
+  				close(fd[1]);
+  				if (rpid == returnedPid)
+  				{
+  					waitpid(lpid, &state, 0);
+  					c->status = WEXITSTATUS(state);
+  					return;
+  				}
+  				if (lpid == returnedPid)
+  				{
+  					waitpid(rpid, state, 0);
+  					c->status = WEXITSTATUS(state);
+  					return;
+  				}
+  			}
+  		}
+  		break;
+  	case SEQUENCE_COMMAND:
+  		execute_command(c->u.command[0]);
+  		execute_command(c->u.command[1]);
+  		c->status = command_status(c->u.command[1]);
+  		break;
+  	case SUBSHELL_COMMAND:
+  		int state;
+  		pid_t pid = fork();
+  		if (pid < 0)
+  			//error
+  		else if (pid == 0)
+  		{
+  			//redirect
+  			//execute the subshell command
+  		}
+  		else
+  		{
+  			waitpid(pid, &state, 0);
+  			c->status = WEXITSTATUS(state);
+  		}
+  		break;
+  	case SIMPLE_COMMAND:
+  		exec_simple_cmd(c);
+  		break;
+  	default: break;
+  }
 }

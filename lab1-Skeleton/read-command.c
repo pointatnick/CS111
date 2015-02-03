@@ -110,7 +110,8 @@ bool until_check(const char *word, int iter)
   return true;
 }
 
-bool done_check(const char *word, int iter)
+bool
+done_check(const char *word, int iter)
 {
   for(int i = 0; i < 5; i++)
   {
@@ -121,20 +122,23 @@ bool done_check(const char *word, int iter)
   return true;
 }
 
-bool valid_char(char c)
+bool
+valid_char(char c)
 {
   return (is_word(c)) || (is_token(c)) || (c == ' ') ||
          (c == '\n') || (c == '\t') || (c == '\0') || (c == '#');
 }
 
 // Print error message
-void print_err(int line)
+void
+print_err(int line)
 {
   fprintf(stderr, "%d: Incorrect syntax", line);
   exit(-1);
 }
 
-command_t make_simple_cmd(char *word)
+command_t
+make_simple_cmd(char *word)
 {
   char* input_stream = (char*) checked_malloc(strlen(word)+1);
   char* output_stream = (char*) checked_malloc(strlen(word)+1);
@@ -229,7 +233,8 @@ command_t make_simple_cmd(char *word)
   return new_cmd;
 }
 
-command_t make_cmd(char *word, enum command_type cmd_type)
+command_t
+make_cmd(char *word, enum command_type cmd_type)
 {
   char* mini_char = (char*) checked_malloc(strlen(word) + 1);
   char* subshell_cmd = (char*) checked_malloc(strlen(word) + 1);
@@ -248,7 +253,6 @@ command_t make_cmd(char *word, enum command_type cmd_type)
   switch(cmd_type)
   {
     case IF_COMMAND:
-    {
       bool pipe_found = false;
       bool sequence_found = false;
       bool if_found = false;
@@ -592,10 +596,8 @@ command_t make_cmd(char *word, enum command_type cmd_type)
         }
       }
       break;
-    }
     case WHILE_COMMAND:
     case UNTIL_COMMAND:
-    {
       bool pipe_found = false;
       bool sequence_found = false;
       bool if_found = false;
@@ -889,9 +891,7 @@ command_t make_cmd(char *word, enum command_type cmd_type)
         }
       }
       break;
-    }
     case PIPE_COMMAND:
-    {
       bool sequence_found = false;
       int pipes = 0;
       int sub_count = 0;
@@ -1004,9 +1004,7 @@ command_t make_cmd(char *word, enum command_type cmd_type)
         right_cmd = NULL;
       }*/
       break;
-    }
     case SEQUENCE_COMMAND:
-    {
       bool if_found = false;
       bool while_found = false;
       bool until_found = false;      
@@ -1235,9 +1233,7 @@ command_t make_cmd(char *word, enum command_type cmd_type)
         right_cmd = NULL;
       }*/
       break;
-    }
     case SUBSHELL_COMMAND:
-    {
       bool sequence_found = false;
       bool pipe_found = false;
       int sub_count = 0;
@@ -1304,12 +1300,9 @@ command_t make_cmd(char *word, enum command_type cmd_type)
         }
       }
       break;
-    }
     default:
-    {
       new_cmd = make_simple_cmd(word);
       break;
-    }
   }
 //  if(mini_char)
 //  {
@@ -1324,7 +1317,8 @@ command_t make_cmd(char *word, enum command_type cmd_type)
   return new_cmd;
 }
 
-void insert_cmd(char *word, enum command_type cmd_type, command_stream_t cmd_stream)
+void
+insert_cmd(char *word, enum command_type cmd_type, command_stream_t cmd_stream)
 {
   char* cmd_prep = (char*) checked_malloc(strlen(word) + 1);
   node_t new_node = (node_t) checked_malloc(sizeof(struct node));
@@ -1356,7 +1350,7 @@ init_command_stream()
 }
 
 command_stream_t
-make_command_stream (int (*get_next_byte) (void *),
+make_command_stream(int (*get_next_byte) (void *),
 		     void *get_next_byte_argument)
 {
     // GENERAL OUTLINE:
@@ -1849,7 +1843,6 @@ make_command_stream (int (*get_next_byte) (void *),
       switch(char_stream[it])
       {
         case 'i':
-        {
           if (if_check(buffer, i))
           {
             for(; i < strlen(buffer) && buffer[i] != '\0'; i++, it++)
@@ -1877,9 +1870,7 @@ make_command_stream (int (*get_next_byte) (void *),
             }
           }
           break;
-        }
         case 'w':
-        {
           for (int j = 0; j < 6; j++, check++)
             check_stream[j] = buffer[check];
           if (while_check(check_stream, 0))
@@ -1912,9 +1903,7 @@ make_command_stream (int (*get_next_byte) (void *),
             }
           }
           break;
-        }
         case 'u':
-        {
           for (int j = 0; j < 6; j++, check++)
             check_stream[j] = buffer[check];
           if (until_check(check_stream, 0))
@@ -1947,7 +1936,6 @@ make_command_stream (int (*get_next_byte) (void *),
             }
           }
           break;
-        }
       }
     }
     // comment behavior
@@ -2048,7 +2036,7 @@ make_command_stream (int (*get_next_byte) (void *),
 }
 
 command_t
-read_command_stream (command_stream_t s)
+read_command_stream(command_stream_t s)
 {
   if (cmd_read == cmd_total)
     return NULL;
